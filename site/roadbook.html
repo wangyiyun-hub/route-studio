@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>进化天路 · 路书总览</title>
+<style>
+  :root{--bg:#0b0d10;--ink:#e8eaed;--dim:#9aa3ad;--line:#1e242c;--warm:#ffb071}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 22px 64px}
+  a{color:var(--warm)}
+
+  header{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;
+    border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:22px}
+  h1{margin:0;font-size:25px;letter-spacing:.5px}
+  header .sub{color:var(--dim);font-size:12.5px}
+  header nav{margin-left:auto}
+  header nav a{text-decoration:none;font-size:12.5px;border:1px solid var(--line);
+    padding:6px 12px;border-radius:7px}
+
+  .kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));
+    gap:10px;margin-bottom:24px}
+  .kpi div{border:1px solid var(--line);border-radius:9px;padding:10px 12px}
+  .kpi span{display:block;font-size:11.5px;color:var(--dim)}
+  .kpi b{font-size:20px;font-weight:650;font-variant-numeric:tabular-nums}
+  .kpi b i{font-style:normal;font-size:11.5px;color:var(--dim);font-weight:400}
+
+  #mapwrap{position:relative;border:1px solid var(--line);border-radius:10px;
+    overflow:hidden;background:#07090b}
+  #map{display:block;width:100%;height:auto}
+  #maptools{position:absolute;right:10px;top:10px;display:flex;gap:6px}
+  #maptools button{background:rgba(11,13,16,.85);color:var(--ink);
+    border:1px solid var(--line);border-radius:6px;padding:5px 10px;
+    font-size:11.5px;cursor:pointer;font-family:inherit}
+  #maptools button.on{background:var(--warm);color:#1a1005;border-color:var(--warm)}
+  .cap{color:var(--dim);font-size:11.5px;margin:8px 0 26px}
+
+  h2{font-size:15px;margin:28px 0 10px;letter-spacing:.4px}
+  h2 em{font-style:normal;color:var(--dim);font-weight:400;font-size:12px;
+    margin-left:8px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);
+    vertical-align:top}
+  th{color:var(--dim);font-weight:500;font-size:11.5px;white-space:nowrap}
+  td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  tr.weak td{color:var(--dim)}
+  .chip{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px;
+    font-weight:600;color:#12080b}
+  .tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10.5px;
+    border:1px solid var(--line);color:var(--dim);margin-left:5px}
+  .warn{color:#e5484d}
+
+  @media print{
+    body{background:#fff;color:#111}
+    .wrap{max-width:none;padding:0}
+    header nav,#maptools{display:none}
+    .kpi div,#mapwrap,th,td{border-color:#bbb}
+    h2,header{page-break-after:avoid}
+    table{page-break-inside:auto}
+    tr{page-break-inside:avoid}
+    .cap,th,.kpi span,header .sub,tr.weak td{color:#555}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1 id="rname">路书总览</h1>
+      <div class="sub" id="rsub"></div>
+    </div>
+    <nav><a href="terrain.html">← 三维地形 / 剖面</a></nav>
+  </header>
+
+  <div class="kpi" id="kpi"></div>
+
+  <div id="mapwrap">
+    <canvas id="map"></canvas>
+    <div id="maptools">
+      <button id="t-sat" class="on">卫星</button>
+      <button id="t-shade">晕渲</button>
+      <button id="t-labels" class="on">标注</button>
+    </div>
+  </div>
+  <div class="cap" id="mapcap"></div>
+
+  <div id="tables"></div>
+</div>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+(async function(){
+  const sc  = await (await fetch('scene.json')).json();
+  const buf = await (await fetch('scene.bin')).arrayBuffer();
+  const R = sc.road, F = sc.frame, T = sc.terrain, r = sc.route, pl = sc.plan;
+  const FL = R.stride / 4;
+  const rv  = new Float32Array(buf, R.offset, R.verts * FL);
+  const dem = new Int16Array(buf, T.offset, T.nx * T.ny);
+
+  document.title = `${r.name} · 路书总览`;
+  $('#rname').textContent = r.name;
+  $('#rsub').textContent =
+    `${r.is_loop ? '环线' : '线路'} · 地形 ${r.dem.source} ${r.dem.m_per_px} m 栅格`
+    + ` · 影像 ${sc.imagery.attribution} ${sc.imagery.m_per_px} m/px`;
+
+  const hm = m => `${Math.floor(m/60)}h${String(Math.round(m%60)).padStart(2,'0')}`;
+  $('#kpi').innerHTML = [
+    ['总里程', r.total_km.toFixed(2), 'km'],
+    ['累计爬升', r.ascent_m, 'm'],
+    ['最高点', Math.round(r.ele_max), 'm'],
+    ['最低点', Math.round(r.ele_min), 'm'],
+    ['入级爬坡', (sc.climbs||[]).length, '处'],
+    ['补给点', (sc.markers||[]).length, '处'],
+    ['最长空档', Math.max(0, ...(pl.gaps||[]).map(g=>g.km)).toFixed(1), 'km'],
+    ['预计总用时', pl.elapsed_min ? hm(pl.elapsed_min) : '—', ''],
+  ].map(([k,v,u]) =>
+    `<div><span>${k}</span><b>${v}<i> ${u}</i></b></div>`).join('');
+
+  /* ---------- top-down map ---------- */
+  // Local metres -> canvas pixels. The satellite texture covers exactly the DEM
+  // bbox, so one transform serves the image, the route and the markers.
+  const cv = $('#map'), g = cv.getContext('2d');
+  const AR = F.span_y / F.span_x;
+  let W = 1140, H = Math.round(W * AR);
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  cv.style.aspectRatio = `${W} / ${H}`;
+  const PX = x => (x / F.span_x + 0.5) * W;
+  const PY = y => (0.5 - y / F.span_y) * H;
+
+  const sat = new Image();
+  let satOK = false;
+  const mode = {sat: true, shade: false, labels: true};
+
+  // Hillshade straight off the elevation raster, for a print-friendly base that
+  // does not need the 3.3 MB JPEG. Standard Lambertian relief shading with the
+  // light from the north-west, which is the convention that stops hills reading
+  // as hollows.
+  let shadeCanvas = null;
+  function buildShade(){
+    if (shadeCanvas) return shadeCanvas;
+    const c = document.createElement('canvas');
+    c.width = T.nx; c.height = T.ny;
+    const cx = c.getContext('2d');
+    const img = cx.createImageData(T.nx, T.ny);
+    const dx = F.span_x / (T.nx - 1), dy = F.span_y / (T.ny - 1);
+    const lx = -0.55, ly = 0.6, lz = 0.58;
+    for (let j = 0; j < T.ny; j++) {
+      for (let i = 0; i < T.nx; i++) {
+        const o = j * T.nx + i;
+        const zl = dem[o - (i > 0 ? 1 : 0)], zr = dem[o + (i < T.nx-1 ? 1 : 0)];
+        const zu = dem[o - (j > 0 ? T.nx : 0)], zd = dem[o + (j < T.ny-1 ? T.nx : 0)];
+        let nx = -(zr - zl) / (2*dx), ny = (zd - zu) / (2*dy), nz = 1;
+        const L = Math.hypot(nx, ny, nz);
+        const d = Math.max(0, (nx*lx + ny*ly + nz*lz) / L);
+        const t = Math.max(0, Math.min(1, (dem[o] - F.ele_min) / (F.ele_max - F.ele_min)));
+        const base = 198 - t * 46;             // higher ground slightly darker
+        const v = Math.round(base * (0.42 + 0.68 * d));
+        const p = o * 4;
+        img.data[p] = Math.min(255, v + 6);
+        img.data[p+1] = Math.min(255, v + 2);
+        img.data[p+2] = Math.min(255, v - 4);
+        img.data[p+3] = 255;
+      }
+    }
+    cx.putImageData(img, 0, 0);
+    shadeCanvas = c;
+    return c;
+  }
+  function drawMap(){
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, W, H);
+
+    if (mode.shade) {
+      g.imageSmoothingEnabled = true;
+      g.drawImage(buildShade(), 0, 0, W, H);
+    } else if (mode.sat && satOK) {
+      g.drawImage(sat, 0, 0, W, H);
+      // Knock the saturation back so the warm route reads against the greens.
+      g.fillStyle = 'rgba(10,14,18,.34)';
+      g.fillRect(0, 0, W, H);
+    } else {
+      g.fillStyle = '#10151a'; g.fillRect(0, 0, W, H);
+    }
+
+    // Route, as runs of constant colour. A dark casing under the line keeps it
+    // legible over both the dark satellite base and the light hillshade.
+    const n = R.verts / 2;
+    const colAt = i => {
+      const o = i * 2 * FL;
+      return `rgb(${Math.round(rv[o+7]*255)},${Math.round(rv[o+8]*255)},`
+           + `${Math.round(rv[o+9]*255)})`;
+    };
+    for (const pass of ['casing', 'line']) {
+      let i = 0;
+      while (i < n - 1) {
+        const c = colAt(i);
+        let j = i;
+        while (j < n - 1 && colAt(j) === c) j++;
+        g.beginPath();
+        for (let k = i; k <= j; k++) {
+          const o = k * 2 * FL;
+          const x = PX(rv[o]), y = PY(rv[o+1]);
+          k === i ? g.moveTo(x, y) : g.lineTo(x, y);
+        }
+        g.lineCap = 'round'; g.lineJoin = 'round';
+        if (pass === 'casing') { g.strokeStyle = 'rgba(6,8,10,.85)'; g.lineWidth = 5.4; }
+        else { g.strokeStyle = c; g.lineWidth = 2.9; }
+        g.stroke();
+        i = j;
+      }
+    }
+
+    if (!mode.labels) return;
+
+    // km posts
+    g.font = '600 10px -apple-system,"PingFang SC",sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (const p of (sc.km_posts || [])) {
+      const x = PX(p.x), y = PY(p.y);
+      g.fillStyle = 'rgba(8,10,12,.82)';
+      g.strokeStyle = 'rgba(255,255,255,.3)'; g.lineWidth = 1;
+      g.beginPath(); g.arc(x, y, 8.5, 0, 7); g.fill(); g.stroke();
+      g.fillStyle = '#cfd4da';
+      g.fillText(String(p.km), x, y + 0.5);
+    }
+
+    // supply points: dot, then a label plate offset so it clears the line
+    g.font = '600 11.5px -apple-system,"PingFang SC",sans-serif';
+    const placed = [];
+    for (const m of (sc.markers || [])) {
+      const x = PX(m.x), y = PY(m.y);
+      const col = m.reliable ? '#46a758' : '#9aa3ad';
+      g.fillStyle = col;
+      g.strokeStyle = 'rgba(6,8,10,.9)'; g.lineWidth = 2;
+      g.beginPath(); g.arc(x, y, 5.5, 0, 7); g.fill(); g.stroke();
+
+      const text = `${m.mark} ${m.name} ${m.km.toFixed(1)}km`;
+      const tw = g.measureText(text).width + 12;
+      // Try four offsets around the dot, take the first that does not collide.
+      let box = null;
+      for (const [ox, oy] of [[12, -16], [12, 10], [-tw-12, -16], [-tw-12, 10]]) {
+        const b = [x + ox, y + oy - 9, x + ox + tw, y + oy + 9];
+        if (b[0] < 2 || b[2] > W - 2) continue;
+        if (!placed.some(p => b[0] < p[2] && b[2] > p[0] && b[1] < p[3] && b[3] > p[1])) {
+          box = b; break;
+        }
+      }
+      if (!box) box = [x + 12, y - 25, x + 12 + tw, y - 7];
+      placed.push(box);
+      g.fillStyle = 'rgba(8,10,12,.86)';
+      g.strokeStyle = col; g.lineWidth = 1;
+      g.beginPath();
+      g.roundRect(box[0], box[1], box[2]-box[0], box[3]-box[1], 5);
+      g.fill(); g.stroke();
+      g.fillStyle = '#e8eaed'; g.textAlign = 'left';
+      g.fillText(text, box[0] + 6, (box[1]+box[3])/2 + 0.5);
+      g.textAlign = 'center';
+    }
+  }
+
+  sat.onload = () => { satOK = true; drawMap(); };
+  sat.onerror = () => { mode.sat = false; mode.shade = true;
+                        $('#t-sat').classList.remove('on');
+                        $('#t-shade').classList.add('on'); drawMap(); };
+  sat.src = 'sat.jpg';
+  drawMap();
+
+  $('#t-sat').onclick = () => {
+    mode.sat = true; mode.shade = false;
+    $('#t-sat').classList.add('on'); $('#t-shade').classList.remove('on'); drawMap();
+  };
+  $('#t-shade').onclick = () => {
+    mode.shade = true; mode.sat = false;
+    $('#t-shade').classList.add('on'); $('#t-sat').classList.remove('on'); drawMap();
+  };
+  $('#t-labels').onclick = () => {
+    mode.labels = !mode.labels;
+    $('#t-labels').classList.toggle('on', mode.labels); drawMap();
+  };
+
+  $('#mapcap').innerHTML =
+    `俯视图 · 路线按爬坡分级着色，往返重合段已左右错开 ${R.width_m} m 以便区分 · `
+    + `圆点为里程桩（每 10 km）· 绿色为可靠补给，灰色为不可靠 · `
+    + `地形 ${r.dem.source}，影像 ${esc(sc.imagery.attribution)}（${sc.imagery.datum}）`;
+  /* ---------- tables ---------- */
+  const tbl = (title, note, head, rows) => rows.length ? `
+    <h2>${title}${note ? `<em>${note}</em>` : ''}</h2>
+    <table><thead><tr>${head.map(h =>
+      `<th${h[1] ? ' class="n"' : ''}>${h[0]}</th>`).join('')}</tr></thead>
+    <tbody>${rows.join('')}</tbody></table>` : '';
+
+  const out = [];
+
+  // Schedule. The clock is the planning step's, started at start_hour.
+  out.push(tbl('补给点时刻表',
+    pl.start_hour != null ? `出发 ${String(pl.start_hour).padStart(2,'0')}:00 起算`
+                          : '',
+    [['标记',0],['地点',0],['里程',1],['海拔',1],['到达',1],['出发',1],['停留',1],['可靠',0]],
+    (pl.schedule || []).map(s => {
+      const m = (sc.markers || []).find(x => Math.abs(x.km - s.km) < 0.05);
+      const ok = m ? m.reliable : null;
+      return `<tr${ok === false ? ' class="weak"' : ''}>`
+        + `<td>${esc(s.mk)}</td><td>${esc(s.nm)}</td>`
+        + `<td class="n">${s.km.toFixed(2)}</td><td class="n">${Math.round(s.ele)}</td>`
+        + `<td class="n">${esc(s.arrive)}</td><td class="n">${esc(s.depart)}</td>`
+        + `<td class="n">${s.stop ? s.stop + ' min' : '—'}</td>`
+        + `<td>${ok === false ? '<span class="tag">不可靠</span>'
+                              : ok ? '可靠' : '—'}</td></tr>`;
+    })));
+
+  // Climbs, with the recalibration note attached so the labels are never read
+  // as ASO categories.
+  out.push(tbl('入级爬坡', esc(sc.climb_rule.note + '，' + sc.climb_rule.basis),
+    [['分级',0],['起点',1],['终点',1],['长度',1],['爬升',1],['平均坡度',1],['顶点海拔',1]],
+    (sc.climbs || []).map(c =>
+      `<tr><td><span class="chip" style="background:${c.colour}">${c.cat}</span></td>`
+      + `<td class="n">${c.from_km.toFixed(1)}</td>`
+      + `<td class="n">${c.to_km.toFixed(1)}</td>`
+      + `<td class="n">${c.len_km.toFixed(2)} km</td>`
+      + `<td class="n">+${Math.round(c.gain_m)} m</td>`
+      + `<td class="n">${c.grade_pct.toFixed(1)}%</td>`
+      + `<td class="n">${Math.round(c.top_m)} m</td></tr>`)));
+
+  out.push(tbl('分段', '相邻补给点之间',
+    [['区间',0],['里程',1],['爬升',1],['下降',1],['平均坡度',1],['骑行',1]],
+    (pl.legs || []).map(l =>
+      `<tr><td>${esc(l.frm_short || l.frm)} → ${esc(l.to_short || l.to)}</td>`
+      + `<td class="n">${l.km.toFixed(2)} km</td>`
+      + `<td class="n">+${Math.round(l.up)} m</td>`
+      + `<td class="n">−${Math.round(l.down)} m</td>`
+      + `<td class="n">${(l.grade*100).toFixed(1)}%</td>`
+      + `<td class="n">${hm(l.min)}</td></tr>`)));
+
+  // Gaps between RELIABLE supply only. A scenic-area kiosk counted as supply is
+  // how the longest dry stretch on a route gets hidden.
+  out.push(tbl('无补给空档', '仅按可靠补给点计算',
+    [['区间',0],['起点',1],['终点',1],['长度',1],['爬升',1],['骑行',1]],
+    (pl.gaps || []).map(gp => {
+      const bad = gp.km >= 25;
+      return `<tr><td>${esc(gp.frm)} → ${esc(gp.to)}</td>`
+        + `<td class="n">${gp.from_km.toFixed(1)}</td>`
+        + `<td class="n">${gp.to_km.toFixed(1)}</td>`
+        + `<td class="n${bad ? ' warn' : ''}">${gp.km.toFixed(1)} km</td>`
+        + `<td class="n">+${Math.round(gp.up)} m</td>`
+        + `<td class="n">${hm(gp.ride_min)}</td></tr>`;
+    })));
+
+  $('#tables').innerHTML = out.join('');
+  window.__roadbookReady = true;
+})();
+</script>
+</body>
+</html>

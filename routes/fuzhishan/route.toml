@@ -1,0 +1,37 @@
+# 覆卮山副本反转 · 绍兴上虞 · iGPSPORT 路书 2894915
+#
+# 唯一手工编辑的文件。data/ 下全部可由 GPX + 本文件重新生成，不要手改。
+title = "覆卮山副本反转"
+subtitle = "骑行补给点方案"
+gpx = "2894915.gpx"
+
+# 爬坡分级：沿用与进化天路相同的本地重标定阈值，便于两条线横向对比。
+# 本线最大单段 +497 m，比天路（+363 m）硬，但仍远低于 ASO 的 HC 门槛 1000 m。
+categories = [
+  { cat = "特级", min_gain_m = 240, colour = "#e5484d" },
+  { cat = "1级",  min_gain_m = 180, colour = "#f76b15" },
+  { cat = "2级",  min_gain_m = 120, colour = "#ffb224" },
+  { cat = "3级",  min_gain_m = 80,  colour = "#46a758" },
+  { cat = "4级",  min_gain_m = 40,  colour = "#5b9dd9" },
+]
+
+# 渲染
+road_width_m = 7.0
+road_lift_m = 1.2
+road_colour = "#ffb071"
+road_min_px = 3.2
+
+# 数据源
+dem_zoom = 13
+sat_zoom = 16           # 本线包围盒更大：1386 个瓦片（天路 1036）
+sat_source = "esri"
+sat_max_px = 4096
+pad_m = 2000.0
+
+# 本线一开始就用 derive.py 自建分段，没有旧管线的 segments.json 可继承。
+use_derived_profile = true
+
+# 补给点来自 2026-09-18 的实地规划（~/route-reports/fuzhishan），含可靠性判定与
+# 停留时长 —— 这些测不出来，只能人工录。9 个点，其中 4 个标为可靠补给。
+# 「覆卮山庄」和「景区游客中心」刻意标为不可靠：山中驿站和景区摊点不算补给，
+# 否则会把全程最长的无补给空档藏起来。

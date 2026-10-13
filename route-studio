@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# route-studio - GPX -> 3D terrain + stage profile + roadbook
+#
+#   route-studio new <name> <file.gpx>   parse, fetch DEM + imagery, write a stub
+#   route-studio build <name>            rebuild the scene from data/ + route.toml
+#   route-studio all <name>              fetch what is missing, then build
+#   route-studio serve [name]            http server on the built site
+#   route-studio shot <name> [tag] [#…]  screenshot through Windows Edge
+#   route-studio list                    routes present
+#
+# After `new`, edit routes/<name>/route.toml, then `build`. Everything under
+# routes/<name>/data/ is derived -- do not hand-edit it.
+set -euo pipefail
+
+H="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY=python3
+cmd="${1:-help}"; shift || true
+
+copy_pages() {   # the page templates live in site/ and are copied per route
+  local dst="$1"
+  mkdir -p "$dst"
+  cp "$H/site/terrain.html" "$H/site/roadbook.html" "$dst/"
+  # The texture is referenced by the page, so it has to sit beside it.
+  [ -f "$H/routes/$2/data/sat.jpg" ] && cp "$H/routes/$2/data/sat.jpg" "$dst/"
+  return 0
+}
+
+case "$cmd" in
+  new)
+    name="${1:?usage: route-studio new <name> <file.gpx>}"
+    gpx="${2:?usage: route-studio new <name> <file.gpx>}"
+    $PY "$H/src/parse_gpx.py" "$gpx" --route "$name"
+    if [ ! -f "$H/routes/$name/route.toml" ]; then
+      cp "$H/routes/_template.toml" "$H/routes/$name/route.toml" 2>/dev/null \
+        || printf 'title = "%s"\ngpx = "%s"\n' "$name" "$(basename "$gpx")" \
+             > "$H/routes/$name/route.toml"
+      echo "wrote routes/$name/route.toml -- edit it, then: route-studio all $name"
+    fi
+    ;;
+
+  dem)   $PY "$H/src/fetch_dem.py" --route "${1:?route}" ;;
+  sat)   $PY "$H/src/fetch_sat.py" --route "${1:?route}" "${@:2}" ;;
+  derive) $PY "$H/src/derive.py" --route "${1:?route}" ;;
+
+  build)
+    name="${1:?route}"
+    $PY "$H/src/build_scene.py" --route "$name"
+    copy_pages "$H/routes/$name/site" "$name"
+    echo "routes/$name/site ready -- route-studio serve $name"
+    ;;
+
+  all)
+    name="${1:?route}"
+    [ -f "$H/routes/$name/data/dem.npz" ] || $PY "$H/src/fetch_dem.py" --route "$name"
+    [ -f "$H/routes/$name/data/sat.jpg" ] || $PY "$H/src/fetch_sat.py" --route "$name"
+    [ -f "$H/routes/$name/data/profile.json" ] || $PY "$H/src/derive.py" --route "$name"
+    "$0" build "$name"
+    ;;
+
+  serve)
+    name="${1:-}"
+    if [ -z "$name" ]; then
+      name="$(basename "$(find "$H/routes" -maxdepth 1 -mindepth 1 -type d | head -1)")"
+    fi
+    port="${PORT:-8799}"
+    echo "http://127.0.0.1:$port/terrain.html   (routes/$name/site)"
+    exec $PY -m http.server "$port" --bind 127.0.0.1 \
+         --directory "$H/routes/$name/site"
+    ;;
+
+  shot)
+    name="${1:?route}"; tag="${2:-overview}"; frag="${3:-}"
+    ROUTE_SITE="$H/routes/$name/site" exec bash "$H/src/shot.sh" "$tag" "$frag"
+    ;;
+
+  list)
+    for d in "$H"/routes/*/; do
+      [ -d "$d" ] || continue
+      n="$(basename "$d")"
+      printf '%-14s' "$n"
+      for f in data/track.json data/dem.npz data/sat.jpg site/scene.bin; do
+        [ -f "$d$f" ] && printf ' %s' "${f##*/}" || printf ' -%s' "${f##*/}"
+      done
+      echo
+    done
+    ;;
+
+  *) sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \?//' ;;
+esac

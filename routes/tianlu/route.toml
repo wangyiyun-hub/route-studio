@@ -1,0 +1,37 @@
+# 进化天路 · 杭州萧山 · iGPSPORT 路书 2228539
+#
+# 这是唯一手工编辑的文件。data/ 下全部可由 GPX + 本文件重新生成，不要手改。
+title = "进化天路"
+subtitle = "骑行补给点方案"
+gpx = "2228539.gpx"
+
+# 爬坡分级：本地重标定，非 ASO 原口径。
+# ASO 的 HC 门槛是单段爬升 1000 m；本线最大单段 267 m，套原口径会把 11 段
+# 全部压进「3 级及以下」，失去区分度。阈值按中国东部丘陵的实际分布重定。
+categories = [
+  { cat = "特级", min_gain_m = 240, colour = "#e5484d" },
+  { cat = "1级",  min_gain_m = 180, colour = "#f76b15" },
+  { cat = "2级",  min_gain_m = 120, colour = "#ffb224" },
+  { cat = "3级",  min_gain_m = 80,  colour = "#46a758" },
+  { cat = "4级",  min_gain_m = 40,  colour = "#5b9dd9" },
+]
+
+# 渲染
+road_width_m = 7.0      # 真实路宽量级；远景由 shader 抬到 road_min_px 像素下限
+road_lift_m = 1.2       # 离地高度，sample_ele 已精确落在渲染三角面上
+road_colour = "#ffb071" # 非入级爬坡段
+road_min_px = 3.2
+
+# 数据源
+dem_zoom = 13           # 16.5 m/px；底层 SRTM 原生 30 m 才是真实上限
+sat_zoom = 16           # 2.07 m/px
+sat_source = "esri"     # WGS-84，与 GPX 同基准，零纠偏；amap 是 GCJ-02 差约 490 m
+sat_max_px = 4096
+pad_m = 2000.0          # 路线包围盒外扩，DEM 和影像必须一致
+
+# 2026-10-13 切到 derive.py 自建分段。旧管线那版（已随页面发布）把连续爬坡拆碎了：
+# 全程最高点 408.6 m 那段实际是从 46.7 km 连续爬 +225 m / 5.2%，旧分段在 48.5 km
+# 断开后算成 +83.6 m / 2.4%（3 级）—— 把本线最硬的一个坡降了两级。
+# 89.6→95.9 km 那段同理，被拆成 +237.8 m 和 +52.3 m 两截，实际连续 +362 m。
+# 用高程剖面逐段验算过，自建分段与实测吻合到 1 m 内。
+use_derived_profile = true

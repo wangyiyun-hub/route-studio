@@ -1,0 +1,362 @@
+[
+ {
+  "from": 0.0,
+  "to": 5.76,
+  "len_km": 5.76,
+  "d_ele": 2.8,
+  "grade": 0.0005,
+  "kind": "flat-ish",
+  "ele_from": 13.0,
+  "ele_to": 15.8
+ },
+ {
+  "from": 5.76,
+  "to": 10.32,
+  "len_km": 4.56,
+  "d_ele": 266.6,
+  "grade": 0.0585,
+  "kind": "up",
+  "ele_from": 15.8,
+  "ele_to": 282.4
+ },
+ {
+  "from": 10.32,
+  "to": 11.36,
+  "len_km": 1.04,
+  "d_ele": -54.0,
+  "grade": -0.0519,
+  "kind": "down",
+  "ele_from": 282.4,
+  "ele_to": 228.4
+ },
+ {
+  "from": 11.36,
+  "to": 15.2,
+  "len_km": 3.84,
+  "d_ele": 145.6,
+  "grade": 0.0379,
+  "kind": "up",
+  "ele_from": 228.4,
+  "ele_to": 374.0
+ },
+ {
+  "from": 15.2,
+  "to": 20.4,
+  "len_km": 5.2,
+  "d_ele": -266.0,
+  "grade": -0.0512,
+  "kind": "down",
+  "ele_from": 374.0,
+  "ele_to": 108.0
+ },
+ {
+  "from": 20.4,
+  "to": 24.16,
+  "len_km": 3.76,
+  "d_ele": 138.6,
+  "grade": 0.0369,
+  "kind": "up",
+  "ele_from": 108.0,
+  "ele_to": 246.6
+ },
+ {
+  "from": 24.16,
+  "to": 25.68,
+  "len_km": 1.52,
+  "d_ele": -78.8,
+  "grade": -0.0518,
+  "kind": "down",
+  "ele_from": 246.6,
+  "ele_to": 167.8
+ },
+ {
+  "from": 25.68,
+  "to": 28.4,
+  "len_km": 2.72,
+  "d_ele": 118.8,
+  "grade": 0.0437,
+  "kind": "up",
+  "ele_from": 167.8,
+  "ele_to": 286.6
+ },
+ {
+  "from": 28.4,
+  "to": 33.84,
+  "len_km": 5.44,
+  "d_ele": -55.0,
+  "grade": -0.0101,
+  "kind": "down",
+  "ele_from": 286.6,
+  "ele_to": 231.6
+ },
+ {
+  "from": 33.84,
+  "to": 36.16,
+  "len_km": 2.32,
+  "d_ele": -123.0,
+  "grade": -0.053,
+  "kind": "down",
+  "ele_from": 231.6,
+  "ele_to": 108.6
+ },
+ {
+  "from": 36.16,
+  "to": 37.76,
+  "len_km": 1.6,
+  "d_ele": -49.8,
+  "grade": -0.0311,
+  "kind": "down",
+  "ele_from": 108.6,
+  "ele_to": 58.8
+ },
+ {
+  "from": 37.76,
+  "to": 42.32,
+  "len_km": 4.56,
+  "d_ele": 197.0,
+  "grade": 0.0432,
+  "kind": "up",
+  "ele_from": 58.8,
+  "ele_to": 255.8
+ },
+ {
+  "from": 42.32,
+  "to": 44.4,
+  "len_km": 2.08,
+  "d_ele": 35.2,
+  "grade": 0.0169,
+  "kind": "up",
+  "ele_from": 255.8,
+  "ele_to": 291.0
+ },
+ {
+  "from": 44.4,
+  "to": 45.2,
+  "len_km": 0.8,
+  "d_ele": -58.4,
+  "grade": -0.073,
+  "kind": "down",
+  "ele_from": 291.0,
+  "ele_to": 232.6
+ },
+ {
+  "from": 45.2,
+  "to": 48.48,
+  "len_km": 3.28,
+  "d_ele": 47.8,
+  "grade": 0.0146,
+  "kind": "down",
+  "ele_from": 232.6,
+  "ele_to": 280.4
+ },
+ {
+  "from": 48.48,
+  "to": 51.92,
+  "len_km": 3.44,
+  "d_ele": 83.6,
+  "grade": 0.0243,
+  "kind": "up",
+  "ele_from": 280.4,
+  "ele_to": 364.0
+ },
+ {
+  "from": 51.92,
+  "to": 54.32,
+  "len_km": 2.4,
+  "d_ele": -107.6,
+  "grade": -0.0448,
+  "kind": "down",
+  "ele_from": 364.0,
+  "ele_to": 256.4
+ },
+ {
+  "from": 54.32,
+  "to": 58.16,
+  "len_km": 3.84,
+  "d_ele": -20.6,
+  "grade": -0.0054,
+  "kind": "down",
+  "ele_from": 256.4,
+  "ele_to": 235.8
+ },
+ {
+  "from": 58.16,
+  "to": 58.96,
+  "len_km": 0.8,
+  "d_ele": -46.8,
+  "grade": -0.0585,
+  "kind": "down",
+  "ele_from": 235.8,
+  "ele_to": 189.0
+ },
+ {
+  "from": 58.96,
+  "to": 60.48,
+  "len_km": 1.52,
+  "d_ele": -92.8,
+  "grade": -0.0611,
+  "kind": "down",
+  "ele_from": 189.0,
+  "ele_to": 96.2
+ },
+ {
+  "from": 60.48,
+  "to": 62.96,
+  "len_km": 2.48,
+  "d_ele": 93.6,
+  "grade": 0.0377,
+  "kind": "up",
+  "ele_from": 96.2,
+  "ele_to": 189.8
+ },
+ {
+  "from": 62.96,
+  "to": 65.52,
+  "len_km": 2.56,
+  "d_ele": -118.2,
+  "grade": -0.0462,
+  "kind": "down",
+  "ele_from": 189.8,
+  "ele_to": 71.6
+ },
+ {
+  "from": 65.52,
+  "to": 66.64,
+  "len_km": 1.12,
+  "d_ele": -63.4,
+  "grade": -0.0566,
+  "kind": "down",
+  "ele_from": 71.6,
+  "ele_to": 8.2
+ },
+ {
+  "from": 66.64,
+  "to": 73.84,
+  "len_km": 7.2,
+  "d_ele": 4.2,
+  "grade": 0.0006,
+  "kind": "flat",
+  "ele_from": 8.2,
+  "ele_to": 12.4
+ },
+ {
+  "from": 73.84,
+  "to": 76.8,
+  "len_km": 2.96,
+  "d_ele": 72.0,
+  "grade": 0.0243,
+  "kind": "up",
+  "ele_from": 12.4,
+  "ele_to": 84.4
+ },
+ {
+  "from": 76.8,
+  "to": 79.12,
+  "len_km": 2.32,
+  "d_ele": -72.2,
+  "grade": -0.0311,
+  "kind": "down",
+  "ele_from": 84.4,
+  "ele_to": 12.2
+ },
+ {
+  "from": 79.12,
+  "to": 84.0,
+  "len_km": 4.88,
+  "d_ele": -2.8,
+  "grade": -0.0006,
+  "kind": "flat",
+  "ele_from": 12.2,
+  "ele_to": 9.4
+ },
+ {
+  "from": 84.0,
+  "to": 85.68,
+  "len_km": 1.68,
+  "d_ele": 0.6,
+  "grade": 0.0004,
+  "kind": "flat",
+  "ele_from": 9.4,
+  "ele_to": 10.0
+ },
+ {
+  "from": 85.68,
+  "to": 89.76,
+  "len_km": 4.08,
+  "d_ele": 3.0,
+  "grade": 0.0007,
+  "kind": "flat",
+  "ele_from": 10.0,
+  "ele_to": 13.0
+ },
+ {
+  "from": 89.76,
+  "to": 93.84,
+  "len_km": 4.08,
+  "d_ele": 235.4,
+  "grade": 0.0577,
+  "kind": "up",
+  "ele_from": 13.0,
+  "ele_to": 248.4
+ },
+ {
+  "from": 93.84,
+  "to": 98.24,
+  "len_km": 4.4,
+  "d_ele": 68.8,
+  "grade": 0.0156,
+  "kind": "up",
+  "ele_from": 248.4,
+  "ele_to": 317.2
+ },
+ {
+  "from": 98.24,
+  "to": 100.72,
+  "len_km": 2.48,
+  "d_ele": -41.4,
+  "grade": -0.0167,
+  "kind": "down",
+  "ele_from": 317.2,
+  "ele_to": 275.8
+ },
+ {
+  "from": 100.72,
+  "to": 105.6,
+  "len_km": 4.88,
+  "d_ele": -261.6,
+  "grade": -0.0536,
+  "kind": "down",
+  "ele_from": 275.8,
+  "ele_to": 14.2
+ },
+ {
+  "from": 105.6,
+  "to": 107.36,
+  "len_km": 1.76,
+  "d_ele": -4.2,
+  "grade": -0.0024,
+  "kind": "flat",
+  "ele_from": 14.2,
+  "ele_to": 10.0
+ },
+ {
+  "from": 107.36,
+  "to": 108.8,
+  "len_km": 1.44,
+  "d_ele": 1.6,
+  "grade": 0.0011,
+  "kind": "flat",
+  "ele_from": 10.0,
+  "ele_to": 11.6
+ },
+ {
+  "from": 108.8,
+  "to": 111.2,
+  "len_km": 2.4,
+  "d_ele": 1.1,
+  "grade": 0.0005,
+  "kind": "flat",
+  "ele_from": 11.6,
+  "ele_to": 12.7
+ }
+]
