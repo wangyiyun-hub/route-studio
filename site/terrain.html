@@ -117,6 +117,16 @@
   #pfread{margin-left:auto;font-size:11px;color:var(--dim);
     font-variant-numeric:tabular-nums;text-align:right;pointer-events:none}
   #pfread b{color:var(--ink);font-size:13px}
+  /* Speed control sits with the flight button. Segmented rather than a slider:
+     four presets are easier to hit than a drag target, and the chosen rate
+     needs to stay readable at a glance. */
+  #speed{display:inline-flex;gap:2px;border:1px solid var(--line);
+    border-radius:7px;overflow:hidden}
+  #speed button{border:none;border-radius:0;padding:6px 8px;font-size:11px;
+    font-variant-numeric:tabular-nums;background:#12171d}
+  #speed button:hover{background:#1d242e}
+  #speed button.on{background:var(--warm);color:#1a1005;font-weight:600}
+
   #pfsize{display:flex;gap:4px}
   #pfsize button{padding:3px 8px;font-size:10.5px;border-radius:5px}
   #pfsize button.on{background:var(--warm);color:#1a1005;border-color:var(--warm)}
@@ -180,6 +190,12 @@
     <button id="b-mark" class="on">补给点</button>
     <button id="b-exag">垂直 ×2</button>
     <button id="b-fly">沿路线飞行</button>
+    <span id="speed" title="飞行倍速">
+      <button data-mult="1">1×</button>
+      <button data-mult="2">2×</button>
+      <button data-mult="4" class="on">4×</button>
+      <button data-mult="8">8×</button>
+    </span>
     <button id="b-reset">复位视角</button>
     <a href="roadbook.html" style="text-decoration:none"><button>路书总览</button></a>
   </div>
@@ -416,7 +432,10 @@ const state = {
   home: null,
   focusKm: null,                      // profile cursor, null = none
   rider: null,                        // km of the moving marker, null = hidden
-  fly: {on: false, km: 0, kmh: 110}   // kmh is playback speed, not riding speed
+  // kmh is playback speed, not riding speed. 110 km/h covers a 111 km route
+  // in about a minute, which turned out to be too slow to watch; `mult` is
+  // the user-facing speed control and persists across flights.
+  fly: {on: false, km: 0, kmh: 110, mult: 4}
 };
 
 /* ---------- load ---------- */
@@ -602,6 +621,11 @@ const state = {
       state.rider = state.fly.km;
       $('#b-fly').classList.add('on');
       $('#b-fly').textContent = '停止飞行';
+    }
+    if (hash.has('mult')) {
+      state.fly.mult = +hash.get('mult');
+      for (const b of document.querySelectorAll('#speed button'))
+        b.classList.toggle('on', +b.dataset.mult === state.fly.mult);
     }
     // profile=collapsed|compact|full , legend=open
     const wantPf = hash.get('profile');
@@ -819,11 +843,23 @@ const state = {
       }
       p2.stroke();
 
-      // categorised climbs: a coloured bar on the baseline, matching the 3D
+      // categorised climbs: a coloured bar on the baseline, matching the 3D.
+      // The one the rider is inside gets a taller bar, so the chart says which
+      // climb is happening rather than only where the cursor is.
       for (const c of (sc.climbs || [])) {
         const a = X(c.from_km), b = X(c.to_km);
+        const here = state.focusKm != null
+                     && state.focusKm >= c.from_km && state.focusKm <= c.to_km;
         p2.fillStyle = c.colour;
-        p2.fillRect(a, y1 + 1, Math.max(b - a, 1.5), 3);
+        p2.fillRect(a, y1 + 1, Math.max(b - a, 1.5), here ? 5 : 3);
+        if (here) {
+          // A faint column over the active climb's span.
+          p2.save();
+          p2.globalAlpha = 0.16;
+          p2.fillStyle = c.colour;
+          p2.fillRect(a, y0 - 6, Math.max(b - a, 1.5), y1 - y0 + 6);
+          p2.restore();
+        }
       }
 
       // km axis
@@ -860,6 +896,42 @@ const state = {
       pfMap = {X, Y, y0, y1, x0, x1};
       try { pfSnap = p2.getImageData(0, 0, pf.width, pf.height); }
       catch { pfSnap = null; }
+      // The snapshot above is deliberately cursor-free, but the cursor still
+      // has to appear on this frame. Without this a full redraw -- which is
+      // what a fresh load or a resize does -- left the chart with no cursor
+      // even though the rider was placed, so the two views looked unrelated.
+      if (state.focusKm != null) paintCursor();
+    }
+
+    // Cursor plus a "progress" wash over the distance already covered: colour
+    // banding alone showed the gradient but not how far along the flight was.
+    function paintCursor(){
+      if (!pfMap || state.focusKm == null) return;
+      const {X, Y, y0, y1, x0} = pfMap;
+      const x = X(state.focusKm);
+      if (state.rider != null && x > x0) {
+        p2.save();
+        p2.globalCompositeOperation = 'lighten';
+        p2.fillStyle = 'rgba(255,176,113,.10)';
+        p2.fillRect(x0, y0 - 6, x - x0, y1 - y0 + 6);
+        p2.restore();
+        // A bright edge at the cursor reads as a wavefront; the wash alone was
+        // too subtle to spot at a glance.
+        const grd = p2.createLinearGradient(Math.max(x0, x - 90), 0, x, 0);
+        grd.addColorStop(0, 'rgba(255,176,113,0)');
+        grd.addColorStop(1, 'rgba(255,176,113,.22)');
+        p2.fillStyle = grd;
+        p2.fillRect(Math.max(x0, x - 90), y0 - 6, Math.min(90, x - x0), y1 - y0 + 6);
+      }
+      const e = P.ele[idxKm(state.focusKm)];
+      p2.strokeStyle = 'rgba(255,176,113,.95)';
+      p2.lineWidth = 1.4;
+      p2.beginPath(); p2.moveTo(x, y0 - 6); p2.lineTo(x, y1); p2.stroke();
+      p2.lineWidth = 1;
+      p2.fillStyle = '#ffb071';
+      p2.beginPath(); p2.arc(x, Y(e), 4, 0, 7); p2.fill();
+      p2.strokeStyle = 'rgba(8,10,12,.85)';
+      p2.beginPath(); p2.arc(x, Y(e), 4, 0, 7); p2.stroke();
     }
 
     // Repaint the saved chart, then just the cursor on top.
@@ -870,14 +942,7 @@ const state = {
       p2.setTransform(1, 0, 0, 1, 0, 0);
       p2.putImageData(pfSnap, 0, 0);
       p2.setTransform(dpr, 0, 0, dpr, 0, 0);
-      if (state.focusKm == null) return;
-      const {X, Y, y0, y1} = pfMap;
-      const x = X(state.focusKm), e = P.ele[idxKm(state.focusKm)];
-      p2.strokeStyle = 'rgba(255,176,113,.95)';
-      p2.lineWidth = 1;
-      p2.beginPath(); p2.moveTo(x, y0 - 6); p2.lineTo(x, y1); p2.stroke();
-      p2.fillStyle = '#ffb071';
-      p2.beginPath(); p2.arc(x, Y(e), 3.6, 0, 7); p2.fill();
+      paintCursor();
     }
 
     const idxKm = km => {
@@ -897,8 +962,12 @@ const state = {
         // the ceiling gets clamped, and two different rows then clamp to the same
         // y and overlap anyway. So track placed rectangles and test against
         // them, including the strip's own title.
-        const CEIL = 26, BOXH = 28;
-        const placed = [[0, 250, 0, 22]];     // #pftitle
+        // The ceiling has to clear the title bar (34 px) plus the box's own
+        // height, or a climb that tops out near the chart's upper edge gets
+        // clamped onto the 赛段剖面 / size buttons. Reserve the bar's full
+        // width too: the size buttons sit further right than the title.
+        const CEIL = 38, BOXH = 28;
+        const placed = [[0, 330, 0, 34]];     // #pfbar: title + size buttons
         const hits = (a, b, t, bt) => placed.some(
           ([pa, pb, pt, pbt]) => a < pb && b > pa && t < pbt && bt > pt);
         for (const el of pfover.children) {
@@ -1060,10 +1129,17 @@ const state = {
       if (km == null) { $('#pfread').innerHTML = ''; return; }
       const i = idxKm(km), g = P.grade[i];
       const c = (sc.climbs || []).find(c => km >= c.from_km && km <= c.to_km);
+      // While flying, show the rate and how long the rest of the route will
+      // take at it -- the number that answers "why is this taking so long".
+      const fly = state.fly.on
+        ? ` · <span style="color:var(--warm)">${state.fly.mult}× `
+          + `${Math.round((r.total_km - km) / (state.fly.kmh * state.fly.mult) * 3600)}s</span>`
+        : '';
       $('#pfread').innerHTML =
         `<b>${km.toFixed(1)}</b> km · <b>${Math.round(P.ele[i])}</b> m · `
         + `坡度 <b>${g > 0 ? '+' : ''}${g.toFixed(1)}%</b>`
-        + (c ? ` · <span style="color:${c.colour}">${c.cat}爬坡</span>` : '');
+        + (c ? ` · <span style="color:${c.colour}">${c.cat}爬坡</span>` : '')
+        + fly;
     };
     let pfDrag = false;
     const pfMove = e => {
@@ -1095,7 +1171,7 @@ const state = {
       if (!state.fly.on) return;
       const dt = flyLast ? Math.min((ts - flyLast) / 1000, 0.1) : 0;
       flyLast = ts;
-      state.fly.km += state.fly.kmh / 3600 * dt;
+      state.fly.km += state.fly.kmh * state.fly.mult / 3600 * dt;
       if (state.fly.km >= r.total_km) state.fly.km = 0;   // loop, it is a loop
       state.focusKm = state.fly.km;
       state.rider = state.fly.km;
@@ -1135,6 +1211,14 @@ const state = {
     };
     for (const b of document.querySelectorAll('#pfsize button'))
       b.onclick = () => setProfileSize(b.dataset.size);
+    for (const b of document.querySelectorAll('#speed button'))
+      b.onclick = () => {
+        state.fly.mult = +b.dataset.mult;
+        for (const o of document.querySelectorAll('#speed button'))
+          o.classList.toggle('on', o === b);
+        readout(state.focusKm);
+      };
+
     const tog = (id, key) => $(id).onclick = () => {
       state[key] = !state[key];
       $(id).classList.toggle('on', state[key]); draw();
