@@ -31,13 +31,29 @@
   #stats b{display:block;font-size:17px;color:var(--ink);font-weight:650;
     font-variant-numeric:tabular-nums}
 
-  #legend{top:16px;right:16px;padding:12px 14px;font-size:12px;min-width:170px}
-  #legend .t{color:var(--dim);margin-bottom:8px;font-size:11px;letter-spacing:.4px}
+  /* Legend and profile both collapse. Expanded they took the right third and
+     the bottom half of the window, leaving the terrain -- the thing the page is
+     for -- as a strip down the middle. Collapsed by default; the full climb
+     table lives on the roadbook page. */
+  #legend{top:16px;right:16px;font-size:12px;overflow:hidden}
+  #legend .hd{display:flex;align-items:center;gap:9px;cursor:pointer;
+    padding:9px 12px;user-select:none;white-space:nowrap}
+  #legend .hd:hover{background:rgba(255,255,255,.04)}
+  #legend .hd .t{color:var(--dim);font-size:11px;letter-spacing:.4px}
+  #legend .hd .mini{display:flex;gap:3px;align-items:center}
+  #legend .hd .mini i{width:13px;height:4px;border-radius:2px;display:block}
+  #legend .hd .car{color:var(--dim);font-size:10px;margin-left:2px;
+    transition:transform .18s}
+  #legend.open .hd .car{transform:rotate(180deg)}
+  #legend.open .hd .mini{display:none}
+  #legend .bd{display:none;padding:0 14px 12px;min-width:200px}
+  #legend.open .bd{display:block}
   #legend .row{display:flex;align-items:center;gap:8px;margin:5px 0}
   #legend .sw{width:22px;height:4px;border-radius:2px;flex:none}
   #legend .n{color:var(--dim);margin-left:auto;font-variant-numeric:tabular-nums}
   #legend .note{color:#6b7480;font-size:10.5px;margin-top:9px;
-    padding-top:8px;border-top:1px solid var(--line);line-height:1.45}
+    padding-top:8px;border-top:1px solid var(--line);line-height:1.45;
+    max-width:290px;white-space:normal}
 
   #ctl{bottom:16px;left:16px;padding:10px 12px;display:flex;gap:6px;flex-wrap:wrap;
     max-width:340px}
@@ -66,8 +82,17 @@
   #err p{color:#e5484d;max-width:460px;line-height:1.7}
 
   /* ---- stage profile ---- */
-  #profile{position:relative;height:250px;flex:none;
-    border-top:1px solid var(--line);background:#0e1114}
+  /* Three heights: a 34 px title bar when collapsed, 128 px compact (elevation
+     only, no climb boxes), 250 px full. Compact is the default -- enough to see
+     the shape of the ride and to scrub, without eating half the window. */
+  #profile{position:relative;flex:none;height:128px;
+    border-top:1px solid var(--line);background:#0e1114;
+    transition:height .2s ease}
+  #profile.collapsed{height:34px}
+  #profile.full{height:250px}
+  #profile.collapsed #pf,#profile.collapsed #pfover{display:none}
+  /* Climb boxes only when there is room for them. */
+  #profile:not(.full) #pfover .clab{display:none}
   #pf{display:block;width:100%;height:100%;cursor:crosshair}
   #pfover{position:absolute;inset:0;pointer-events:none}
   #pfover .clab{position:absolute;transform:translate(-50%,-100%);
@@ -79,11 +104,22 @@
     font-size:9.5px;font-variant-numeric:tabular-nums}
   #pfover .mlab{position:absolute;transform:translate(-50%,0);font-size:9.5px;
     color:var(--dim);white-space:nowrap}
-  #pftitle{position:absolute;left:14px;top:9px;font-size:11px;color:var(--dim);
-    letter-spacing:.4px;pointer-events:none}
-  #pfread{position:absolute;right:14px;top:7px;font-size:11px;color:var(--dim);
-    font-variant-numeric:tabular-nums;pointer-events:none;text-align:right}
+  /* The bar sits over the chart canvas, so it needs its own stacking context
+     above it -- and `pointer-events:none` on the bar with `auto` on the
+     children, or the whole 34 px strip would swallow drags meant for the
+     chart's scrub area. The buttons are the only thing that should be
+     clickable here. */
+  #pfbar{position:absolute;left:0;right:0;top:0;height:34px;display:flex;
+    align-items:center;gap:10px;padding:0 14px;z-index:5;
+    pointer-events:none}
+  #pfbar #pfsize,#pfbar #pfsize button{pointer-events:auto}
+  #pftitle{font-size:11px;color:var(--dim);letter-spacing:.4px}
+  #pfread{margin-left:auto;font-size:11px;color:var(--dim);
+    font-variant-numeric:tabular-nums;text-align:right;pointer-events:none}
   #pfread b{color:var(--ink);font-size:13px}
+  #pfsize{display:flex;gap:4px}
+  #pfsize button{padding:3px 8px;font-size:10.5px;border-radius:5px}
+  #pfsize button.on{background:var(--warm);color:#1a1005;border-color:var(--warm)}
 
   /* marker labels drawn over the 3D view */
   #marks{position:absolute;inset:0;pointer-events:none;overflow:hidden}
@@ -96,6 +132,23 @@
   #marks .m.soft{opacity:.62}
   #marks .dot{position:absolute;width:7px;height:7px;border-radius:50%;
     transform:translate(-50%,-50%);border:1.5px solid rgba(8,10,12,.8)}
+
+  /* The moving rider. A pulsing ring reads as motion even on a still frame,
+     which is what a screenshot of the playback has to show. */
+  #rider{position:absolute;width:13px;height:13px;border-radius:50%;
+    transform:translate(-50%,-50%);background:#fff;
+    border:2.5px solid var(--warm);
+    box-shadow:0 0 0 4px rgba(255,176,113,.3), 0 0 14px 4px rgba(255,176,113,.55);
+    animation:pulse 1.5s ease-out infinite}
+  #rider::after{content:attr(data-km) " km";position:absolute;
+    left:50%;top:-24px;transform:translateX(-50%);
+    font-size:10.5px;white-space:nowrap;padding:1px 6px;border-radius:5px;
+    background:rgba(8,10,12,.9);border:1px solid var(--warm);
+    color:var(--warm);font-variant-numeric:tabular-nums}
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 2px rgba(255,176,113,.5), 0 0 10px 3px rgba(255,176,113,.5)}
+    70%{box-shadow:0 0 0 13px rgba(255,176,113,0), 0 0 16px 5px rgba(255,176,113,.3)}
+    100%{box-shadow:0 0 0 2px rgba(255,176,113,.5), 0 0 10px 3px rgba(255,176,113,.5)}}
 </style>
 </head>
 <body>
@@ -110,9 +163,15 @@
   </div>
 
   <div id="legend" class="panel">
-    <div class="t">爬坡分级</div>
-    <div id="cats"></div>
-    <div class="note" id="crule"></div>
+    <div class="hd" id="legend-hd">
+      <span class="t">爬坡分级</span>
+      <span class="mini" id="legend-mini"></span>
+      <span class="car">▾</span>
+    </div>
+    <div class="bd">
+      <div id="cats"></div>
+      <div class="note" id="crule"></div>
+    </div>
   </div>
 
   <div id="ctl" class="panel">
@@ -134,8 +193,15 @@
 <div id="profile">
   <canvas id="pf"></canvas>
   <div id="pfover"></div>
-  <div id="pftitle">赛段剖面 · 按坡度着色，入级爬坡标注分级</div>
-  <div id="pfread"></div>
+  <div id="pfbar">
+    <span id="pftitle">赛段剖面</span>
+    <span id="pfsize">
+      <button data-size="collapsed">收起</button>
+      <button data-size="compact" class="on">紧凑</button>
+      <button data-size="full">完整</button>
+    </span>
+    <span id="pfread"></span>
+  </div>
 </div>
 
 <div id="load"><div>载入地形数据<div class="bar"><i id="lbar"></i></div></div></div>
@@ -349,7 +415,8 @@ const state = {
   exag: 1.0, sat: true, road: true, mark: true,
   home: null,
   focusKm: null,                      // profile cursor, null = none
-  fly: {on: false, km: 0, kmh: 150}   // kmh is scene playback, not riding speed
+  rider: null,                        // km of the moving marker, null = hidden
+  fly: {on: false, km: 0, kmh: 110}   // kmh is playback speed, not riding speed
 };
 
 /* ---------- load ---------- */
@@ -466,11 +533,37 @@ const state = {
       : '<div style="color:var(--dim)">无入级爬坡</div>';
     $('#crule').textContent = sc.climb_rule.note + '：' + sc.climb_rule.basis + '。'
       + sc.climb_rule.aso_note;
+
+    // Collapsed, the legend still has to say something: a row of swatches for
+    // the categories this route actually contains.
+    $('#legend-mini').innerHTML = sc.climb_rule.thresholds
+      .filter(t => (sc.climbs || []).some(c => c.cat === t.cat))
+      .map(t => `<i style="background:${t.colour}"></i>`).join('');
+    $('#legend-hd').onclick = () => $('#legend').classList.toggle('open');
     $('#prov').textContent = `地形 ${r.dem.source} · 影像 ${sc.imagery.attribution}（${sc.imagery.datum}）`;
 
     /* ---------- camera ---------- */
     const diag = Math.hypot(F.span_x, F.span_y);
-    state.dist = diag * 0.95;
+    // Fit the whole box into whatever viewport we actually got. A fixed multiple
+    // of the diagonal only frames correctly at one aspect ratio: with the
+    // profile strip taking 250 px off the bottom, a tall-but-narrow window left
+    // the terrain as a sliver in the middle.
+    const fitDist = () => {
+      const b = $('#view').getBoundingClientRect();
+      const fovy = 0.80;
+      const asp = Math.max(b.width / Math.max(b.height, 1), 0.01);
+      // Looking down at `pitch`, the box's north-south extent is foreshortened
+      // to span_y * cos(pitch) on screen, while its height contributes
+      // span_z * sin(pitch). A flat 1.35x headroom instead of this left the
+      // terrain filling about half the viewport with empty sky above and below.
+      const relief = (F.ele_max - F.ele_min) * state.exag;
+      const hOnScreen = F.span_y * Math.cos(state.pitch)
+                        + relief * Math.sin(state.pitch);
+      const needV = (hOnScreen / 2) / Math.tan(fovy / 2);
+      const needH = (F.span_x / 2) / Math.tan(fovy / 2) / asp;
+      return Math.max(needV, needH) * 1.06;   // a little air at the edges
+    };
+    state.dist = fitDist();
     state.home = {yaw:state.yaw, pitch:state.pitch, dist:state.dist, tx:0, ty:0};
 
     // Deep link: #km=8.2&dist=900&pitch=0.3&yaw=1.1 . Needed to screenshot a
@@ -500,15 +593,31 @@ const state = {
     // fly=1 puts the camera in chase position at the linked km without starting
     // playback, which is how the flight view gets screenshotted.
     if (hash.get('fly') === '1') {
+      // Place the rider without starting playback, so a still frame of the
+      // flight can be screenshotted. state.rider is what drawRider() reads --
+      // setting only state.fly left the pip hidden.
       state.fly.on = true;
       state.fly.km = hash.has('km') ? parseFloat(hash.get('km')) : 0;
       state.focusKm = state.fly.km;
+      state.rider = state.fly.km;
+      $('#b-fly').classList.add('on');
+      $('#b-fly').textContent = '停止飞行';
     }
+    // profile=collapsed|compact|full , legend=open
+    const wantPf = hash.get('profile');
+    if (wantPf === 'collapsed' || wantPf === 'full') {
+      $('#profile').classList.add(wantPf);
+      for (const b of document.querySelectorAll('#pfsize button'))
+        b.classList.toggle('on', b.dataset.size === wantPf);
+      if (wantPf === 'full')
+        $('#pftitle').textContent = '赛段剖面 · 按坡度着色，入级爬坡标注分级';
+    }
+    if (hash.get('legend') === 'open') $('#legend').classList.add('open');
     const midZ = (F.ele_min + F.ele_max) / 2;
 
     let lastMVP = null, lastVP = [1, 1];
 
-    function draw(){
+    function draw(opts = {}){
       const dpr = Math.min(devicePixelRatio || 1, 2);
       // Size from the container, not the window: the profile strip takes the
       // bottom of the viewport now, and using innerHeight stretched the 3D view
@@ -522,16 +631,15 @@ const state = {
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       gl.enable(gl.DEPTH_TEST);
 
-      let eye, ctr;
-      if (state.fly.on) {
-        [eye, ctr] = flyCamera();
-      } else {
-        const cp = Math.cos(state.pitch), sp = Math.sin(state.pitch);
-        ctr = [state.tx, state.ty, midZ * state.exag];
-        eye = [ctr[0] + state.dist * cp * Math.sin(state.yaw),
-               ctr[1] - state.dist * cp * Math.cos(state.yaw),
-               ctr[2] + state.dist * sp];
-      }
+      // The camera is always the orbit camera. An earlier version handed it to
+      // a chase rig during playback, so the whole map swung around the screen --
+      // what was wanted is the opposite: the map holds still and a marker runs
+      // along the route, the way a route animation reads.
+      const cp = Math.cos(state.pitch), sp = Math.sin(state.pitch);
+      const ctr = [state.tx, state.ty, midZ * state.exag];
+      const eye = [ctr[0] + state.dist * cp * Math.sin(state.yaw),
+                   ctr[1] - state.dist * cp * Math.cos(state.yaw),
+                   ctr[2] + state.dist * sp];
       const view = M.look(eye, ctr, [0,0,1]);
       const proj = M.persp(0.80, w/h, diag*0.004, diag*7);
       const mvp = M.mul(proj, view);
@@ -591,7 +699,14 @@ const state = {
       }
       gl.bindVertexArray(null);
       drawMarkLabels();
-      drawProfile();
+      drawRider();
+      // The profile chart is expensive and almost never changes: redrawing it
+      // every frame during a flight meant 1391 filled polygons plus a DOM
+      // collision pass that reads offsetWidth on 13 labels -- a forced synchronous
+      // layout, sixty times a second. That was the stutter. Pass {profile:false}
+      // for frames where only the camera moved; the cursor is drawn on its own.
+      if (opts.profile === false) drawCursorOnly();
+      else drawProfile();
     }
     window.__draw = draw;
 
@@ -618,7 +733,10 @@ const state = {
     /* ---------- stage profile ---------- */
     const pf = $('#pf'), p2 = pf.getContext('2d');
     const P = sc.profile;
+    // Top padding has to clear the title bar, and in compact mode there are no
+    // climb boxes to leave room for above the ridge line.
     const PAD = {l:38, r:16, t:30, b:26};
+    const padTop = () => $('#profile').classList.contains('full') ? 30 : 38;
     // Gradient bands, in the language a rider uses: below 3% is a drag, above
     // 10% is a wall. These are the fill colours under the curve.
     const GRADE_BANDS = [
@@ -642,7 +760,13 @@ const state = {
       p2.clearRect(0, 0, box.width, box.height);
 
       const W = box.width, H = box.height;
-      const x0 = PAD.l, x1 = W - PAD.r, y0 = PAD.t, y1 = H - PAD.b;
+      const x0 = PAD.l, x1 = W - PAD.r, y0 = padTop(), y1 = H - PAD.b;
+      // Bail out before the adaptive step loops below. When the strip is
+      // collapsed the canvas is display:none and this box is 0x0, so x1-x0 and
+      // y1-y0 both go negative -- and a negative numerator is always below the
+      // spacing threshold, so `step *= 2` ran until Infinity and locked the tab.
+      // Measured: 2000+ iterations at box 0x0 and again mid-transition at 34 px.
+      if (x1 - x0 < 60 || y1 - y0 < 24) { pfMap = null; pfSnap = null; return; }
       const emin = Math.min(...P.ele), emax = Math.max(...P.ele);
       const pad = (emax - emin) * 0.12 || 10;
       const lo = Math.max(0, emin - pad), hi = emax + pad;
@@ -652,7 +776,12 @@ const state = {
       // horizontal grid + elevation labels
       p2.font = '10px -apple-system,"PingFang SC",sans-serif';
       p2.textBaseline = 'middle';
-      const stepE = (hi - lo) > 400 ? 200 : (hi - lo) > 180 ? 100 : 50;
+      const span = hi - lo;
+      const room = y1 - y0;
+      let stepE = span > 400 ? 200 : span > 180 ? 100 : 50;
+      // Bounded: the guard above makes room positive, but a belt-and-braces cap
+      // means a future layout change cannot reintroduce a hang.
+      for (let g = 0; g < 12 && room / (span / stepE) < 26; g++) stepE *= 2;
       for (let e = Math.ceil(lo/stepE)*stepE; e <= hi; e += stepE) {
         const y = Y(e);
         p2.strokeStyle = 'rgba(255,255,255,.055)';
@@ -701,7 +830,8 @@ const state = {
       p2.strokeStyle = 'rgba(255,255,255,.14)';
       p2.beginPath(); p2.moveTo(x0, y1); p2.lineTo(x1, y1); p2.stroke();
       p2.fillStyle = '#6b7480'; p2.textAlign = 'center'; p2.textBaseline = 'top';
-      const stepK = r.total_km > 80 ? 20 : 10;
+      let stepK = r.total_km > 80 ? 20 : 10;
+      for (let g = 0; g < 12 && (x1 - x0) / (r.total_km / stepK) < 48; g++) stepK *= 2;
       for (let km = 0; km <= r.total_km; km += stepK) {
         const x = X(km);
         p2.strokeStyle = 'rgba(255,255,255,.14)';
@@ -719,15 +849,35 @@ const state = {
       }
       p2.lineWidth = 1;
 
-      // cursor
-      if (state.focusKm != null) {
-        const x = X(state.focusKm), e = P.ele[idxKm(state.focusKm)];
-        p2.strokeStyle = 'rgba(255,176,113,.95)';
-        p2.beginPath(); p2.moveTo(x, y0 - 6); p2.lineTo(x, y1); p2.stroke();
-        p2.fillStyle = '#ffb071';
-        p2.beginPath(); p2.arc(x, Y(e), 3.6, 0, 7); p2.fill();
-      }
+      // The cursor is deliberately NOT drawn here: this canvas state gets
+      // snapshotted below, and a baked-in cursor would smear across the chart
+      // as the flight advances.
       profileLabels(X, Y, y1);
+      // Keep the mapping so the cursor can be redrawn without recomputing the
+      // whole chart. Also snapshot the chart pixels: drawing the cursor means
+      // erasing the previous one, and re-filling 1391 polygons to do that is
+      // what we are trying to avoid.
+      pfMap = {X, Y, y0, y1, x0, x1};
+      try { pfSnap = p2.getImageData(0, 0, pf.width, pf.height); }
+      catch { pfSnap = null; }
+    }
+
+    // Repaint the saved chart, then just the cursor on top.
+    let pfMap = null, pfSnap = null;
+    function drawCursorOnly(){
+      if (!pfMap || !pfSnap) { drawProfile(); return; }
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      p2.setTransform(1, 0, 0, 1, 0, 0);
+      p2.putImageData(pfSnap, 0, 0);
+      p2.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (state.focusKm == null) return;
+      const {X, Y, y0, y1} = pfMap;
+      const x = X(state.focusKm), e = P.ele[idxKm(state.focusKm)];
+      p2.strokeStyle = 'rgba(255,176,113,.95)';
+      p2.lineWidth = 1;
+      p2.beginPath(); p2.moveTo(x, y0 - 6); p2.lineTo(x, y1); p2.stroke();
+      p2.fillStyle = '#ffb071';
+      p2.beginPath(); p2.arc(x, Y(e), 3.6, 0, 7); p2.fill();
     }
 
     const idxKm = km => {
@@ -807,6 +957,30 @@ const state = {
       profileLabels(X, Y, y1);
     }
 
+    /* ---------- the moving rider ---------- */
+    // An HTML pip projected the same way as the supply markers. It is the thing
+    // that moves during playback -- the terrain and the camera do not.
+    let riderEl = null;
+    function drawRider(){
+      if (!riderEl) {
+        riderEl = document.createElement('div');
+        riderEl.id = 'rider';
+        marksBox.appendChild(riderEl);
+      }
+      if (state.rider == null || !lastMVP) { riderEl.style.display = 'none'; return; }
+      const i = atKm(state.rider);
+      const X = cl.x[i], Y = cl.y[i], Z = cl.z[i] * state.exag, A = lastMVP;
+      const cw = A[3]*X + A[7]*Y + A[11]*Z + A[15];
+      if (cw <= 0.0001) { riderEl.style.display = 'none'; return; }
+      const cx = (A[0]*X + A[4]*Y + A[8]*Z + A[12]) / cw;
+      const cy = (A[1]*X + A[5]*Y + A[9]*Z + A[13]) / cw;
+      const [vw, vh] = lastVP;
+      riderEl.style.display = '';
+      riderEl.style.left = ((cx * 0.5 + 0.5) * vw) + 'px';
+      riderEl.style.top = ((0.5 - cy * 0.5) * vh) + 'px';
+      riderEl.dataset.km = state.rider.toFixed(1);
+    }
+
     /* ---------- marker labels over the 3D view ---------- */
     const marksBox = $('#marks');
     let markEls = null;
@@ -842,21 +1016,6 @@ const state = {
         dot.style.left = px + 'px'; dot.style.top = py + 'px';
         lab.style.left = px + 'px'; lab.style.top = (py - 8) + 'px';
       });
-    }
-
-    /* ---------- fly camera ---------- */
-    function flyCamera(){
-      const i = atKm(state.fly.km);
-      const j = Math.min(nC - 1, i + 6);
-      let tx = cl.x[j] - cl.x[i], ty = cl.y[j] - cl.y[i];
-      const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
-      const z = cl.z[i] * state.exag;
-      // Chase view: behind and above the rider, aimed a little way up the road.
-      const back = 420, up = 190, ahead = 900;
-      const eye = [cl.x[i] - tx*back, cl.y[i] - ty*back, z + up];
-      const k = atKm(state.fly.km + ahead/1000);
-      const ctr = [cl.x[k], cl.y[k], cl.z[k] * state.exag + 40];
-      return [eye, ctr];
     }
 
     /* ---------- interaction ---------- */
@@ -939,8 +1098,9 @@ const state = {
       state.fly.km += state.fly.kmh / 3600 * dt;
       if (state.fly.km >= r.total_km) state.fly.km = 0;   // loop, it is a loop
       state.focusKm = state.fly.km;
+      state.rider = state.fly.km;
       readout(state.focusKm);
-      draw();
+      draw({profile: false});
       flyTimer = requestAnimationFrame(flyTick);
     }
     $('#b-fly').onclick = () => {
@@ -949,18 +1109,32 @@ const state = {
       $('#b-fly').textContent = state.fly.on ? '停止飞行' : '沿路线飞行';
       if (state.fly.on) {
         if (state.focusKm != null) state.fly.km = state.focusKm;
+        state.rider = state.fly.km;
         flyLast = 0; flyTimer = requestAnimationFrame(flyTick);
       } else {
         cancelAnimationFrame(flyTimer); flyTimer = null;
-        // Hand the orbit camera the spot the flight ended on, so stopping does
-        // not teleport the view back to wherever it was before.
-        const i = atKm(state.fly.km);
-        state.tx = cl.x[i]; state.ty = cl.y[i];
-        state.dist = diag * 0.18; state.pitch = 0.34;
+        state.rider = null;
         draw();
       }
     };
 
+    /* ---------- profile size ---------- */
+    const setProfileSize = size => {
+      const el = $('#profile');
+      el.classList.remove('collapsed', 'full');
+      if (size !== 'compact') el.classList.add(size);
+      for (const b of document.querySelectorAll('#pfsize button'))
+        b.classList.toggle('on', b.dataset.size === size);
+      $('#pftitle').textContent = size === 'full'
+        ? '赛段剖面 · 按坡度着色，入级爬坡标注分级' : '赛段剖面';
+      // The canvas is sized from its box, so it has to be redrawn after the
+      // height changes -- and after the CSS transition, or it measures the old
+      // height and the chart ends up the wrong size.
+      draw();
+      setTimeout(draw, 230);
+    };
+    for (const b of document.querySelectorAll('#pfsize button'))
+      b.onclick = () => setProfileSize(b.dataset.size);
     const tog = (id, key) => $(id).onclick = () => {
       state[key] = !state[key];
       $(id).classList.toggle('on', state[key]); draw();
@@ -972,7 +1146,12 @@ const state = {
       $('#b-exag').textContent = state.exag > 1.5 ? '垂直 ×2' : '垂直 ×1';
       draw();
     };
-    $('#b-reset').onclick = () => { Object.assign(state, state.home); draw(); };
+    $('#b-reset').onclick = () => {
+      // Recompute the fit rather than restoring the distance captured at load:
+      // the window may well have been resized since.
+      Object.assign(state, state.home, {dist: fitDist()});
+      draw();
+    };
 
     step(100);
     draw();
