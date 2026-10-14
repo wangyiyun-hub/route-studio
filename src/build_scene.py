@@ -423,6 +423,16 @@ def main() -> int:
             # this route, and a number that would contradict the published page.
             "ascent_m": prof["gain_m"],
             "descent_m": prof.get("loss_m"),
+            # Cumulative ascent is method-dependent, so the page states the
+            # method. This route's older published page reads 2041 m from an
+            # opentopodata point-query pipeline; the same SRTM data sampled off
+            # the DEM raster at this step gives 2174 m. Neither is wrong -- the
+            # figure is sensitive to sample spacing and smoothing -- but a
+            # number shown without its method invites exactly the "which one is
+            # right" question that has no answer.
+            "ascent_method": (
+                f"DEM 栅格 {prof.get('step_m', 80):.0f} m 步长逐点累加"
+                if "step_m" in prof else "逐点累加"),
             "ele_min": round(min(prof["ele"]), 1), "ele_max": round(max(prof["ele"]), 1),
             "is_loop": track.get("is_loop", False),
             "dem": {"source": "AWS terrain-tiles (SRTM 30 m)",

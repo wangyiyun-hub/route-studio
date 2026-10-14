@@ -106,12 +106,14 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g,
   $('#rname').textContent = r.name;
   $('#rsub').textContent =
     `${r.is_loop ? '环线' : '线路'} · 地形 ${r.dem.source} ${r.dem.m_per_px} m 栅格`
-    + ` · 影像 ${sc.imagery.attribution} ${sc.imagery.m_per_px} m/px`;
+    + ` · 影像 ${sc.imagery.attribution} ${sc.imagery.m_per_px} m/px`
+    + (r.ascent_method ? ` · † 爬升口径：${r.ascent_method}` : '');
 
   const hm = m => `${Math.floor(m/60)}h${String(Math.round(m%60)).padStart(2,'0')}`;
   $('#kpi').innerHTML = [
     ['总里程', r.total_km.toFixed(2), 'km'],
-    ['累计爬升', r.ascent_m, 'm'],
+    ['累计爬升' + (r.ascent_method ? '<sup style="color:#6b7480">†</sup>' : ''),
+     r.ascent_m, 'm'],
     ['最高点', Math.round(r.ele_max), 'm'],
     ['最低点', Math.round(r.ele_min), 'm'],
     ['入级爬坡', (sc.climbs||[]).length, '处'],

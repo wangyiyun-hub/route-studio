@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>进化天路 · 三维地形预览</title>
+<style>
+  :root{
+    --bg:#0b0d10; --ink:#e8eaed; --dim:#9aa3ad; --line:#1e242c;
+    --warm:#ffb071;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    overflow:hidden}
+  /* 3D above, stage profile below: a rider reads one against the other, so
+     putting them on separate tabs would mean switching back and forth. */
+  body{display:flex;flex-direction:column}
+  #view{position:relative;flex:1;min-height:0}
+  #gl{display:block;width:100%;height:100%;cursor:grab}
+  #gl.drag{cursor:grabbing}
+
+  .panel{position:absolute;background:rgba(11,13,16,.82);backdrop-filter:blur(12px);
+    border:1px solid var(--line);border-radius:10px}
+
+  /* Every overlay collapses. Together they covered all four corners of the
+     map; the terrain is what the page is for, so each panel keeps a small
+     always-visible header and folds its body away. */
+  .fold > .hd{display:flex;align-items:center;gap:8px;cursor:pointer;
+    padding:9px 12px;user-select:none;white-space:nowrap}
+  .fold > .hd:hover{background:rgba(255,255,255,.04)}
+  .fold > .hd .car{color:var(--dim);font-size:10px;margin-left:auto;
+    transition:transform .18s;padding-left:4px}
+  .fold.open > .hd .car{transform:rotate(180deg)}
+  .fold > .bd{display:none}
+  .fold.open > .bd{display:block}
+
+  #hud{top:16px;left:16px;max-width:330px;overflow:hidden}
+  #hud .hd h1{margin:0;font-size:15px;letter-spacing:.5px;font-weight:700}
+  #hud .hd .km{color:var(--warm);font-size:12px;
+    font-variant-numeric:tabular-nums;font-weight:600}
+  #hud .bd{padding:0 16px 13px}
+  #hud .sub{color:var(--dim);font-size:11.5px;margin-bottom:10px}
+  #stats{display:grid;grid-template-columns:repeat(2,1fr);gap:7px 14px}
+  #stats div{font-size:12px;color:var(--dim)}
+  #stats b{display:block;font-size:17px;color:var(--ink);font-weight:650;
+    font-variant-numeric:tabular-nums}
+
+  /* Legend and profile both collapse. Expanded they took the right third and
+     the bottom half of the window, leaving the terrain -- the thing the page is
+     for -- as a strip down the middle. Collapsed by default; the full climb
+     table lives on the roadbook page. */
+  #legend{top:16px;right:16px;font-size:12px;overflow:hidden}
+  #legend .hd .t{color:var(--dim);font-size:11px;letter-spacing:.4px}
+  #legend .hd .mini{display:flex;gap:3px;align-items:center}
+  #legend .hd .mini i{width:13px;height:4px;border-radius:2px;display:block}
+  #legend.open .hd .mini{display:none}
+  /* Display is handled by the shared .fold rules; this only adds padding. */
+  #legend .bd{padding:0 14px 12px;min-width:200px}
+  #legend .row{display:flex;align-items:center;gap:8px;margin:5px 0}
+  #legend .sw{width:22px;height:4px;border-radius:2px;flex:none}
+  #legend .n{color:var(--dim);margin-left:auto;font-variant-numeric:tabular-nums}
+  #legend .note{color:#6b7480;font-size:10.5px;margin-top:9px;
+    padding-top:8px;border-top:1px solid var(--line);line-height:1.45;
+    max-width:290px;white-space:normal}
+
+  /* The controls cannot fold completely away -- there would be nothing left to
+     click to get them back -- so collapsed they keep a single compact row. */
+  #ctl{bottom:16px;left:16px;overflow:hidden;max-width:360px}
+  /* `display` goes on the .open rule, not on `#ctl .bd`. An ID selector there
+     (specificity 1-1-0) beat `.fold > .bd{display:none}` (1-0-0), so this
+     panel's body stayed flex and the collapse silently did nothing -- the
+     caret rotated and nothing else happened. #hud and #tip set no display at
+     all, which is why only this one broke. */
+  #ctl .bd{padding:0 12px 11px;gap:6px;flex-wrap:wrap}
+  #ctl.open > .bd{display:flex}
+  #ctl .hd .quick{display:flex;gap:5px;margin-left:4px}
+  #ctl.open .hd .quick{display:none}
+  #ctl .hd .quick button{padding:3px 8px;font-size:10.5px;border-radius:5px}
+  button{background:#161b22;color:var(--ink);border:1px solid var(--line);
+    border-radius:7px;padding:6px 11px;font-size:12px;cursor:pointer;
+    font-family:inherit}
+  button:hover{background:#1d242e;border-color:#2c3540}
+  button.on{background:var(--warm);color:#1a1005;border-color:var(--warm);
+    font-weight:600}
+
+  #tip{bottom:16px;right:16px;font-size:11px;color:var(--dim);
+    max-width:280px;overflow:hidden}
+  #tip .bd{padding:0 12px 10px;line-height:1.6}
+  #tip kbd{background:#161b22;border:1px solid var(--line);border-radius:4px;
+    padding:1px 5px;font-size:10px;font-family:inherit}
+
+  #load{position:fixed;inset:0;display:grid;place-items:center;
+    background:var(--bg);z-index:9;transition:opacity .4s}
+  #load.gone{opacity:0;pointer-events:none}
+  #load div{text-align:center;color:var(--dim);font-size:13px}
+  #load .bar{width:220px;height:3px;background:#1a1f26;border-radius:2px;
+    margin:14px auto 0;overflow:hidden}
+  #load .bar i{display:block;height:100%;width:0;background:var(--warm);
+    transition:width .3s}
+  #err{position:fixed;inset:0;display:none;place-items:center;padding:40px;
+    background:var(--bg);z-index:10;text-align:center}
+  #err p{color:#e5484d;max-width:460px;line-height:1.7}
+
+  /* ---- stage profile ---- */
+  /* Three heights: a 34 px title bar when collapsed, 128 px compact (elevation
+     only, no climb boxes), 250 px full. Compact is the default -- enough to see
+     the shape of the ride and to scrub, without eating half the window. */
+  #profile{position:relative;flex:none;height:128px;
+    border-top:1px solid var(--line);background:#0e1114;
+    transition:height .2s ease}
+  #profile.collapsed{height:34px}
+  #profile.full{height:264px}
+  #profile.collapsed #pf,#profile.collapsed #pfover{display:none}
+  /* Climb boxes only when there is room for them. */
+  #profile:not(.full) #pfover .clab{display:none}
+  #pf{display:block;width:100%;height:100%;cursor:crosshair}
+  #pfover{position:absolute;inset:0;pointer-events:none}
+  #pfover .clab{position:absolute;transform:translate(-50%,-100%);
+    font-size:10px;line-height:1.25;text-align:center;white-space:nowrap;
+    padding:2px 5px;border-radius:4px;background:rgba(8,10,12,.9);
+    border:1px solid var(--line)}
+  #pfover .clab b{font-size:10.5px}
+  #pfover .clab s{display:block;text-decoration:none;color:var(--dim);
+    font-size:9.5px;font-variant-numeric:tabular-nums}
+  #pfover .mlab{position:absolute;transform:translate(-50%,0);font-size:9.5px;
+    color:var(--dim);white-space:nowrap}
+  /* The bar sits over the chart canvas, so it needs its own stacking context
+     above it -- and `pointer-events:none` on the bar with `auto` on the
+     children, or the whole 34 px strip would swallow drags meant for the
+     chart's scrub area. The buttons are the only thing that should be
+     clickable here. */
+  #pfbar{position:absolute;left:0;right:0;top:0;height:34px;display:flex;
+    align-items:center;gap:10px;padding:0 14px;z-index:5;
+    pointer-events:none}
+  #pfbar #pfsize,#pfbar #pfsize button{pointer-events:auto}
+  #pftitle{font-size:11px;color:var(--dim);letter-spacing:.4px}
+  #pfread{margin-left:auto;font-size:11px;color:var(--dim);
+    font-variant-numeric:tabular-nums;text-align:right;pointer-events:none}
+  #pfread b{color:var(--ink);font-size:13px}
+  /* Speed control sits with the flight button. Segmented rather than a slider:
+     four presets are easier to hit than a drag target, and the chosen rate
+     needs to stay readable at a glance. */
+  #speed{display:inline-flex;gap:2px;border:1px solid var(--line);
+    border-radius:7px;overflow:hidden}
+  #speed button{border:none;border-radius:0;padding:6px 8px;font-size:11px;
+    font-variant-numeric:tabular-nums;background:#12171d}
+  #speed button:hover{background:#1d242e}
+  #speed button.on{background:var(--warm);color:#1a1005;font-weight:600}
+
+  #pfsize{display:flex;gap:4px}
+  #pfsize button{padding:3px 8px;font-size:10.5px;border-radius:5px}
+  #pfsize button.on{background:var(--warm);color:#1a1005;border-color:var(--warm)}
+
+  /* marker labels drawn over the 3D view */
+  #marks{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+  #marks .m{position:absolute;transform:translate(-50%,-100%);
+    font-size:10.5px;white-space:nowrap;padding:2px 6px;border-radius:5px;
+    background:rgba(8,10,12,.86);border:1px solid var(--line);
+    color:var(--ink);line-height:1.3}
+  #marks .m i{font-style:normal;color:var(--dim);
+    font-variant-numeric:tabular-nums;margin-left:5px}
+  #marks .m.soft{opacity:.62}
+  #marks .dot{position:absolute;width:7px;height:7px;border-radius:50%;
+    transform:translate(-50%,-50%);border:1.5px solid rgba(8,10,12,.8)}
+
+  /* The moving rider. A pulsing ring reads as motion even on a still frame,
+     which is what a screenshot of the playback has to show. */
+  #rider{position:absolute;width:13px;height:13px;border-radius:50%;
+    transform:translate(-50%,-50%);background:#fff;
+    border:2.5px solid var(--warm);
+    box-shadow:0 0 0 4px rgba(255,176,113,.3), 0 0 14px 4px rgba(255,176,113,.55);
+    animation:pulse 1.5s ease-out infinite}
+  #rider::after{content:attr(data-km) " km";position:absolute;
+    left:50%;top:-24px;transform:translateX(-50%);
+    font-size:10.5px;white-space:nowrap;padding:1px 6px;border-radius:5px;
+    background:rgba(8,10,12,.9);border:1px solid var(--warm);
+    color:var(--warm);font-variant-numeric:tabular-nums}
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 2px rgba(255,176,113,.5), 0 0 10px 3px rgba(255,176,113,.5)}
+    70%{box-shadow:0 0 0 13px rgba(255,176,113,0), 0 0 16px 5px rgba(255,176,113,.3)}
+    100%{box-shadow:0 0 0 2px rgba(255,176,113,.5), 0 0 10px 3px rgba(255,176,113,.5)}}
+</style>
+</head>
+<body>
+<div id="view">
+  <canvas id="gl"></canvas>
+  <div id="marks"></div>
+
+  <div id="hud" class="panel fold">
+    <div class="hd">
+      <h1 id="rname">进化天路</h1>
+      <span class="km" id="hud-km"></span>
+      <span class="car">▾</span>
+    </div>
+    <div class="bd">
+      <div class="sub" id="rsub">三维地形预览</div>
+      <div id="stats"></div>
+    </div>
+  </div>
+
+  <div id="legend" class="panel fold">
+    <div class="hd">
+      <span class="t">爬坡分级</span>
+      <span class="mini" id="legend-mini"></span>
+      <span class="car">▾</span>
+    </div>
+    <div class="bd">
+      <div id="cats"></div>
+      <div class="note" id="crule"></div>
+    </div>
+  </div>
+
+  <div id="ctl" class="panel fold">
+    <div class="hd">
+      <span style="color:var(--dim);font-size:11px;letter-spacing:.4px">控制</span>
+      <span class="quick">
+        <button id="q-fly">飞行</button>
+        <button id="q-reset">复位</button>
+      </span>
+      <span class="car">▾</span>
+    </div>
+    <div class="bd">
+      <button id="b-sat" class="on">卫星影像</button>
+      <button id="b-road" class="on">路线</button>
+      <button id="b-mark" class="on">补给点</button>
+      <button id="b-exag">垂直 ×2</button>
+      <button id="b-fly">沿路线飞行</button>
+      <span id="speed" title="飞行倍速">
+        <button data-mult="1">1×</button>
+        <button data-mult="2">2×</button>
+        <button data-mult="4" class="on">4×</button>
+        <button data-mult="8">8×</button>
+      </span>
+      <button id="b-reset">复位视角</button>
+      <a href="roadbook.html" style="text-decoration:none"><button>路书总览</button></a>
+    </div>
+  </div>
+
+  <div id="tip" class="panel fold">
+    <div class="hd">
+      <span style="font-size:11px;letter-spacing:.4px">操作 / 数据源</span>
+      <span class="car">▾</span>
+    </div>
+    <div class="bd">
+      拖动旋转 · 滚轮缩放 · <kbd>Shift</kbd>+拖动平移 · 剖面上拖动可定位
+      <span id="prov" style="display:block;margin-top:5px;color:#6b7480"></span>
+    </div>
+  </div>
+</div>
+
+<div id="profile">
+  <canvas id="pf"></canvas>
+  <div id="pfover"></div>
+  <div id="pfbar">
+    <span id="pftitle">赛段剖面</span>
+    <span id="pfsize">
+      <button data-size="collapsed">收起</button>
+      <button data-size="compact" class="on">紧凑</button>
+      <button data-size="full">完整</button>
+    </span>
+    <span id="pfread"></span>
+  </div>
+</div>
+
+<div id="load"><div>载入地形数据<div class="bar"><i id="lbar"></i></div></div></div>
+<div id="err"><p id="emsg"></p></div>
+
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const fail = m => { $('#err').style.display='grid'; $('#emsg').textContent=m;
+                    $('#load').classList.add('gone'); console.error(m); };
+
+/* ---------- small matrix helpers (column-major, like GL expects) ---------- */
+const M = {
+  ident: () => new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]),
+  mul(a,b){ const o=new Float32Array(16);
+    for(let i=0;i<4;i++)for(let j=0;j<4;j++){ let s=0;
+      for(let k=0;k<4;k++) s+=a[k*4+j]*b[i*4+k]; o[i*4+j]=s; } return o; },
+  persp(fovy,asp,zn,zf){ const f=1/Math.tan(fovy/2), nf=1/(zn-zf);
+    return new Float32Array([f/asp,0,0,0, 0,f,0,0, 0,0,(zf+zn)*nf,-1, 0,0,2*zf*zn*nf,0]); },
+  look(eye,ctr,up){
+    let z=[eye[0]-ctr[0],eye[1]-ctr[1],eye[2]-ctr[2]];
+    let l=Math.hypot(...z)||1; z=z.map(v=>v/l);
+    let x=[up[1]*z[2]-up[2]*z[1], up[2]*z[0]-up[0]*z[2], up[0]*z[1]-up[1]*z[0]];
+    l=Math.hypot(...x)||1; x=x.map(v=>v/l);
+    const y=[z[1]*x[2]-z[2]*x[1], z[2]*x[0]-z[0]*x[2], z[0]*x[1]-z[1]*x[0]];
+    return new Float32Array([
+      x[0],y[0],z[0],0, x[1],y[1],z[1],0, x[2],y[2],z[2],0,
+      -(x[0]*eye[0]+x[1]*eye[1]+x[2]*eye[2]),
+      -(y[0]*eye[0]+y[1]*eye[1]+y[2]*eye[2]),
+      -(z[0]*eye[0]+z[1]*eye[1]+z[2]*eye[2]), 1]); }
+};
+/* ---------- shaders ---------- */
+// Terrain: satellite texture modulated by a two-light shading model. The second
+// light is a dim fill from the opposite side; with a single lamp the north-facing
+// slopes go to black and the relief stops reading.
+// Terrain mesh is procedural: no vertex buffer at all. One instanced triangle
+// strip per raster row, with gl_VertexID giving the column and whether this
+// vertex is on the near or far edge of the row. Elevations come from an integer
+// texture, and the normal is a central difference on that same texture. Shipping
+// explicit geometry for this grid cost 55 MB; the raster alone is 1.96 MB.
+const VS_TERRAIN = `#version 300 es
+precision highp float;
+precision highp int;
+uniform mat4 uMVP;
+uniform float uExag;
+// R32F rather than R16I. The raster travels as Int16 to keep scene.bin small,
+// but an integer sampler read from a *vertex* shader is thin ice -- the first
+// attempt drew a dead-flat slab under SwiftShader with no compile error to show
+// for it. Float textures in the vertex stage are baseline WebGL2.
+uniform sampler2D uDem;
+uniform vec2 uGrid;        // nx, ny
+uniform vec2 uSpan;        // span_x, span_y in metres
+out vec3 vNrm; out vec2 vUV; out float vZ;
+
+float eleAt(ivec2 c){
+  c = clamp(c, ivec2(0), ivec2(uGrid) - 1);
+  return texelFetch(uDem, c, 0).r;
+}
+
+void main(){
+  int col = gl_VertexID >> 1;
+  int row = int(gl_InstanceID) + (gl_VertexID & 1);
+  ivec2 cell = ivec2(col, row);
+
+  float z = eleAt(cell);
+  vec2 uv = vec2(float(col) / (uGrid.x - 1.0), float(row) / (uGrid.y - 1.0));
+  // v runs north->south to match the texture and the raster's row order.
+  vec2 pos = vec2((uv.x - 0.5) * uSpan.x, (0.5 - uv.y) * uSpan.y);
+
+  float dx = uSpan.x / (uGrid.x - 1.0);
+  float dy = uSpan.y / (uGrid.y - 1.0);
+  float zl = eleAt(cell + ivec2(-1, 0)), zr = eleAt(cell + ivec2(1, 0));
+  float zu = eleAt(cell + ivec2(0, -1)), zd = eleAt(cell + ivec2(0, 1));
+  // Row index grows southward, so d/drow is the negative of d/dnorth.
+  vec3 n = vec3(-(zr - zl) / (2.0 * dx), (zd - zu) / (2.0 * dy), 1.0);
+  // Exaggerating z steepens the true slope, so the normal must be re-tilted by
+  // the same factor or the lighting belongs to a terrain that is not on screen.
+  vNrm = normalize(vec3(n.xy * uExag, n.z));
+  vUV = uv; vZ = z;
+  gl_Position = uMVP * vec4(pos, z * uExag, 1.0);
+}`;
+
+const FS_TERRAIN = `#version 300 es
+precision highp float;
+in vec3 vNrm; in vec2 vUV; in float vZ;
+uniform sampler2D uTex;
+uniform bool uUseTex;
+uniform float uEleMin, uEleMax;
+out vec4 o;
+void main(){
+  vec3 n = normalize(vNrm);
+  vec3 L1 = normalize(vec3(-0.45, 0.62, 0.65));   // main, from the north-west
+  vec3 L2 = normalize(vec3(0.55, -0.40, 0.30));   // fill, opposite and weaker
+  float d = max(dot(n, L1), 0.0) * 0.82 + max(dot(n, L2), 0.0) * 0.26 + 0.20;
+  vec3 base;
+  if (uUseTex) {
+    base = texture(uTex, vUV).rgb;
+  } else {
+    // Hypsometric fallback, so the page still reads if the texture is missing.
+    float t = clamp((vZ - uEleMin) / max(uEleMax - uEleMin, 1.0), 0.0, 1.0);
+    base = mix(mix(vec3(0.19,0.27,0.21), vec3(0.42,0.40,0.26), smoothstep(0.0,0.55,t)),
+               vec3(0.62,0.56,0.47), smoothstep(0.45,1.0,t));
+  }
+  o = vec4(base * d, 1.0);
+}`;
+
+// Road: a draped triangle strip. aSide (0|1) is the across-ribbon coordinate, so
+// the fragment stage knows where the kerb is and can darken the edge, which is
+// what makes it read as a surface with width rather than a flat band of colour.
+const VS_ROAD = `#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPos;     // centreline point
+layout(location=1) in vec2 aSideDir; // unit vector across the road
+layout(location=2) in float aS;      // 0..1 along the route
+layout(location=3) in float aSign;   // -1 or +1, which kerb this vertex is
+layout(location=4) in vec3 aColour;  // climb-category colour, or the base warm
+uniform mat4 uMVP; uniform float uExag;
+uniform float uHalfW;    // real half-width in metres
+uniform float uMinPx;    // never thinner than this on screen
+uniform float uPxToWorld;// 2 / (viewportHeight * proj[1][1])
+out float vS; out float vSide; out float vWide; out vec3 vCol;
+void main(){
+  vec4 centre = uMVP * vec4(aPos.xy, aPos.z * uExag, 1.0);
+  // clip.w grows with view distance, so metres-per-pixel at this depth is
+  // w * (2 / (h * proj11)). Widen to the pixel floor when the true width would
+  // fall below it, and tell the fragment stage which regime we are in.
+  float worldPerPx = max(centre.w, 0.0001) * uPxToWorld;
+  float want = uMinPx * worldPerPx;
+  // Not "half": that is a reserved word in GLSL ES 3.0 and fails to compile.
+  float hw = max(uHalfW, want);
+  vWide = clamp(want / max(uHalfW, 0.001), 0.0, 1.0);
+  vS = aS; vSide = aSign * 0.5 + 0.5; vCol = aColour;
+  gl_Position = uMVP * vec4(aPos.xy + aSideDir * (hw * aSign),
+                            aPos.z * uExag, 1.0);
+}`;
+
+const FS_ROAD = `#version 300 es
+precision highp float;
+in float vS; in float vSide; in float vWide; in vec3 vCol;
+out vec4 o;
+void main(){
+  float e = abs(vSide - 0.5) * 2.0;          // 0 at centre, 1 at the kerb
+  // Per-vertex: a categorised climb carries its category colour, the rest of the
+  // route the base warm.
+  vec3 tint = vCol;
+  // Solid tint with a dark outline, at every range. Two earlier attempts put a
+  // dark tarmac surface with a bright centre line here, and both were wrong:
+  //
+  //  - A triangle strip's across-ribbon coordinate is interpolated over skewed
+  //    triangles, so the e = 0 iso-line zigzags between cross-sections instead
+  //    of running down the middle. Any narrow feature keyed to the centre
+  //    therefore breaks into a checkerboard at close range.
+  //  - A dark interior hides the climb-category colour exactly where there is
+  //    finally enough width to show it.
+  //
+  // The outline keys off e near 1, which is the value AT the kerb vertices, so
+  // it is the one band the interpolation renders faithfully.
+  float edge = smoothstep(0.74, 0.97, e);
+  vec3 c = mix(tint, tint * 0.42, edge);
+  // A touch of lift down the middle reads as camber without being a hard line.
+  c *= 1.0 + (1.0 - smoothstep(0.0, 0.8, e)) * 0.10 * (1.0 - vWide);
+  o = vec4(c, 1.0);
+}`;
+
+const VS_MARK = `#version 300 es
+precision highp float;
+layout(location=0) in vec3 aPos;
+layout(location=1) in float aSize;
+uniform mat4 uMVP; uniform float uExag;
+void main(){
+  gl_Position = uMVP * vec4(aPos.xy, aPos.z * uExag, 1.0);
+  gl_PointSize = aSize / max(gl_Position.w * 0.0016, 0.55);
+}`;
+
+const FS_MARK = `#version 300 es
+precision highp float;
+uniform vec3 uColor;
+out vec4 o;
+void main(){
+  vec2 p = gl_PointCoord * 2.0 - 1.0;
+  float r = length(p);
+  if (r > 1.0) discard;
+  float ring = smoothstep(1.0, 0.86, r) - smoothstep(0.66, 0.52, r);
+  vec3 c = mix(uColor, vec3(1.0), ring * 0.75);
+  o = vec4(c, smoothstep(1.0, 0.9, r));
+}`;
+/* ---------- gl setup ---------- */
+const cv = $('#gl');
+const gl = cv.getContext('webgl2', {antialias:true, powerPreference:'high-performance'});
+if (!gl) fail('这个页面需要 WebGL2。浏览器或显卡驱动不支持，换一个现代浏览器试试。');
+
+function prog(vsSrc, fsSrc, tag){
+  const mk = (t, s) => {
+    const sh = gl.createShader(t);
+    gl.shaderSource(sh, s); gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS))
+      throw new Error(tag+' shader: '+gl.getShaderInfoLog(sh));
+    return sh;
+  };
+  const p = gl.createProgram();
+  gl.attachShader(p, mk(gl.VERTEX_SHADER, vsSrc));
+  gl.attachShader(p, mk(gl.FRAGMENT_SHADER, fsSrc));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS))
+    throw new Error(tag+' link: '+gl.getProgramInfoLog(p));
+  return p;
+}
+
+const state = {
+  // pitch stays at 0.52 (~30 deg). Raising it to 0.78 to fill the empty sky
+  // pushed the DEM's far edge into the apex of the frustum and the rectangular
+  // tile rendered as a spike. Empty sky is the lesser problem.
+  yaw: -0.62, pitch: 0.52, dist: 0, tx: 0, ty: 0,
+  exag: 1.0, sat: true, road: true, mark: true,
+  home: null,
+  focusKm: null,                      // profile cursor, null = none
+  rider: null,                        // km of the moving marker, null = hidden
+  // kmh is playback speed, not riding speed. 110 km/h covers a 111 km route
+  // in about a minute, which turned out to be too slow to watch; `mult` is
+  // the user-facing speed control and persists across flights.
+  fly: {on: false, km: 0, kmh: 110, mult: 4}
+};
+
+/* ---------- load ---------- */
+(async function boot(){
+  try {
+    const bar = $('#lbar');
+    const step = n => bar.style.width = n + '%';
+    step(8);
+
+    const sc = await (await fetch('scene.json')).json();
+    step(22);
+    const buf = await (await fetch('scene.bin')).arrayBuffer();
+    step(58);
+
+    const T = sc.terrain, R = sc.road, F = sc.frame;
+    // Views over the one blob. Byte offsets came from the packer, which pads each
+    // block to a 4-byte boundary so these constructors stay legal.
+    const dem    = new Int16Array(buf, T.offset, T.nx * T.ny);
+    const rVerts = new Float32Array(buf, R.offset, R.verts * (R.stride / 4));
+
+    const pT = prog(VS_TERRAIN, FS_TERRAIN, 'terrain');
+    const pR = prog(VS_ROAD, FS_ROAD, 'road');
+    const pM = prog(VS_MARK, FS_MARK, 'marker');
+
+    // Expand the Int16 raster to Float32 for an R32F texture, already scaled to
+    // metres so the shader reads elevation directly. The wire format stays 2
+    // bytes per cell; only the GPU copy is 4.
+    const demF = new Float32Array(dem.length);
+    for (let i = 0; i < dem.length; i++) demF[i] = dem[i] * T.z_scale;
+
+    const demTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, demTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, T.nx, T.ny, 0,
+                  gl.RED, gl.FLOAT, demF);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    // The terrain needs a VAO bound even with no attributes: a draw call with
+    // the default VAO and zero enabled arrays is legal, but keeping an explicit
+    // empty one makes the state switch away from the road's VAO unambiguous.
+    const vaoT = gl.createVertexArray();
+
+    // road VAO
+    const vaoR = gl.createVertexArray();
+    gl.bindVertexArray(vaoR);
+    const vbR = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbR);
+    gl.bufferData(gl.ARRAY_BUFFER, rVerts, gl.STATIC_DRAW);
+    const RS = R.stride;   // 40: pos3 + side2 + s1 + sign1 + rgb3
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,3,gl.FLOAT,false,RS,0);
+    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1,2,gl.FLOAT,false,RS,12);
+    gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2,1,gl.FLOAT,false,RS,20);
+    gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3,1,gl.FLOAT,false,RS,24);
+    gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4,3,gl.FLOAT,false,RS,28);
+
+    // markers VAO
+    const mk = sc.markers || [];
+    const mArr = new Float32Array(mk.length * 4);
+    mk.forEach((m,i) => { mArr[i*4]=m.x; mArr[i*4+1]=m.y; mArr[i*4+2]=m.z;
+                          mArr[i*4+3]= m.reliable ? 34 : 24; });
+    const vaoM = gl.createVertexArray();
+    gl.bindVertexArray(vaoM);
+    const vbM = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbM);
+    gl.bufferData(gl.ARRAY_BUFFER, mArr, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,3,gl.FLOAT,false,16,0);
+    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1,1,gl.FLOAT,false,16,12);
+    gl.bindVertexArray(null);
+
+    // texture
+    let tex = null, texReady = false;
+    if (sc.imagery) {
+      tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      // One opaque pixel until the JPEG decodes, so the first frames are not black.
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE,
+                    new Uint8Array([70, 78, 68]));
+      const img = new Image();
+      img.onload = () => {
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, img);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        texReady = true; window.__texReady = true; draw();
+      };
+      img.onerror = () => { console.warn('texture failed, using hypsometric tint'); };
+      img.src = 'sat.jpg';
+    }
+    step(78);
+
+    /* ---------- HUD ---------- */
+    const r = sc.route;
+    $('#rname').textContent = r.name || '三维地形预览';
+    $('#rsub').textContent =
+      `${r.is_loop ? '环线' : '线路'} · DEM ${r.dem.m_per_px} m 栅格 · 影像 ${sc.imagery.m_per_px} m/px`;
+    // Ascent carries its method in a tooltip and a footnote marker; see
+    // ascent_method in scene.json for why.
+    $('#stats').innerHTML = [
+      ['总里程', r.total_km.toFixed(2), 'km', ''],
+      ['累计爬升', r.ascent_m, 'm', r.ascent_method || ''],
+      ['最高点', r.ele_max.toFixed(0), 'm', ''],
+      ['最低点', r.ele_min.toFixed(0), 'm', ''],
+    ].map(([k,v,u,tip]) =>
+      `<div${tip ? ` title="${tip}"` : ''}>${k}${tip ? '<sup style="color:#6b7480">†</sup>' : ''}`
+      + `<b>${v}<span style="font-size:11px;color:var(--dim)"> ${u}</span></b></div>`).join('');
+    if (r.ascent_method)
+      $('#rsub').textContent += ` · 爬升口径 ${r.ascent_method}`;
+
+    $('#cats').innerHTML = (sc.climbs||[]).length
+      ? sc.climb_rule.thresholds.map(t => {
+          const n = (sc.climbs||[]).filter(c => c.cat === t.cat).length;
+          return n ? `<div class="row"><i class="sw" style="background:${t.colour}"></i>
+            ${t.cat} <span style="color:var(--dim)">≥${t.min_gain_m}m</span>
+            <span class="n">${n}</span></div>` : '';
+        }).join('')
+      : '<div style="color:var(--dim)">无入级爬坡</div>';
+    $('#crule').textContent = sc.climb_rule.note + '：' + sc.climb_rule.basis + '。'
+      + sc.climb_rule.aso_note;
+
+    // Collapsed, the legend still has to say something: a row of swatches for
+    // the categories this route actually contains.
+    $('#legend-mini').innerHTML = sc.climb_rule.thresholds
+      .filter(t => (sc.climbs || []).some(c => c.cat === t.cat))
+      .map(t => `<i style="background:${t.colour}"></i>`).join('');
+    // One handler for every fold. The 3D view is sized from its box, so a panel
+    // opening does not change it -- but the terrain fit does depend on the
+    // viewport, and the panels overlay rather than push, so no redraw needed.
+    for (const el of document.querySelectorAll('.fold'))
+      el.querySelector('.hd').onclick = e => {
+        // Clicks on the quick buttons must not also toggle the panel.
+        if (e.target.closest('button') && e.target.closest('.quick')) return;
+        el.classList.toggle('open');
+      };
+
+    // Collapsed, the HUD header still carries the one number that matters.
+    $('#hud-km').textContent = `${r.total_km.toFixed(1)} km · +${r.ascent_m} m`;
+    $('#prov').textContent = `地形 ${r.dem.source} · 影像 ${sc.imagery.attribution}（${sc.imagery.datum}）`;
+
+    /* ---------- camera ---------- */
+    const diag = Math.hypot(F.span_x, F.span_y);
+    // Route extent, straight off the ribbon buffer (x,y are the first two
+    // floats of each vertex). Needed before the centreline cache is built.
+    let rxMin = Infinity, rxMax = -Infinity, ryMin = Infinity, ryMax = -Infinity;
+    {
+      const st = R.stride / 4;
+      for (let i = 0; i < R.verts; i++) {
+        const x = rVerts[i * st], y = rVerts[i * st + 1];
+        if (x < rxMin) rxMin = x; if (x > rxMax) rxMax = x;
+        if (y < ryMin) ryMin = y; if (y > ryMax) ryMax = y;
+      }
+    }
+    const routeSpanX = rxMax - rxMin, routeSpanY = ryMax - ryMin;
+    const routeCx = (rxMax + rxMin) / 2, routeCy = (ryMax + ryMin) / 2;
+    // Fit the whole box into whatever viewport we actually got. A fixed multiple
+    // of the diagonal only frames correctly at one aspect ratio: with the
+    // profile strip taking 250 px off the bottom, a tall-but-narrow window left
+    // the terrain as a sliver in the middle.
+    // Frame the ROUTE, not the DEM. The raster is padded 2 km beyond the track
+    // on every side and the track does not fill what is left, so fitting the
+    // whole bbox put the ride at 72% x 79% of the frame and spent the rest of
+    // the viewport on empty ground.
+    const fitDist = () => {
+      const b = $('#view').getBoundingClientRect();
+      const fovy = 0.80;
+      const asp = Math.max(b.width / Math.max(b.height, 1), 0.01);
+      // Looking down at `pitch`, the north-south extent is foreshortened to
+      // span * cos(pitch) on screen while the relief contributes
+      // height * sin(pitch).
+      const relief = (F.ele_max - F.ele_min) * state.exag;
+      const hOnScreen = routeSpanY * Math.cos(state.pitch)
+                        + relief * Math.sin(state.pitch);
+      const needV = (hOnScreen / 2) / Math.tan(fovy / 2);
+      const needH = (routeSpanX / 2) / Math.tan(fovy / 2) / asp;
+      return Math.max(needV, needH) * 1.04;
+    };
+    // Aim at the route's centre. Nudging the target north to "use the upper
+    // frame" does the opposite -- it swings the ground downward -- so the only
+    // honest fix for empty sky is the distance, below.
+    state.tx = routeCx;
+    state.ty = routeCy;
+    state.dist = fitDist();
+    state.home = {yaw:state.yaw, pitch:state.pitch, dist:state.dist,
+                  tx:routeCx, ty:routeCy};
+
+    // Deep link: #km=8.2&dist=900&pitch=0.3&yaw=1.1 . Needed to screenshot a
+    // specific stretch -- verifying that the ribbon sits on the road in the
+    // imagery means getting the camera down to street level on purpose, and a
+    // whole-route view hides a half-road-width error entirely.
+    const hash = new URLSearchParams(location.hash.slice(1));
+    if (hash.has('km')) {
+      const want = parseFloat(hash.get('km')) * 1000;
+      const P = sc.profile;
+      // Walk the ribbon's own vertices: index 2i and 2i+1 share a centreline
+      // point, and attribute 5 of each is the normalised distance along it.
+      let best = 0, bestd = Infinity;
+      for (let i = 0; i < R.verts; i += 2) {
+        const FL = R.stride / 4;   // floats per ribbon vertex
+        const s = rVerts[i*FL + 5] * (r.total_km * 1000);
+        const d = Math.abs(s - want);
+        if (d < bestd) { bestd = d; best = i; }
+      }
+      state.tx = rVerts[best*(R.stride/4)];
+      state.ty = rVerts[best*(R.stride/4) + 1];
+    }
+    for (const [k, f] of [['dist', v => diag * v], ['pitch', v => v], ['yaw', v => v]])
+      if (hash.has(k)) state[k] = f(parseFloat(hash.get(k)));
+    if (hash.has('exag')) state.exag = parseFloat(hash.get('exag'));
+    if (hash.get('sat') === '0') { state.sat = false; $('#b-sat').classList.remove('on'); }
+    // fly=1 puts the camera in chase position at the linked km without starting
+    // playback, which is how the flight view gets screenshotted.
+    if (hash.get('fly') === '1') {
+      // Place the rider without starting playback, so a still frame of the
+      // flight can be screenshotted. state.rider is what drawRider() reads --
+      // setting only state.fly left the pip hidden.
+      state.fly.on = true;
+      state.fly.km = hash.has('km') ? parseFloat(hash.get('km')) : 0;
+      state.focusKm = state.fly.km;
+      state.rider = state.fly.km;
+      $('#b-fly').classList.add('on');
+      $('#b-fly').textContent = '停止飞行';
+      $('#q-fly').classList.add('on');
+      $('#q-fly').textContent = '停止';
+    }
+    // panels=hud,ctl,legend,tip -- open the named ones
+    for (const name of (hash.get('panels') || '').split(',').filter(Boolean))
+      document.querySelector('#' + name)?.classList.add('open');
+    if (hash.has('mult')) {
+      state.fly.mult = +hash.get('mult');
+      // The collapsed row proxies the two actions worth reaching without
+    // expanding; keeping them as separate elements means the full panel's
+    // buttons stay the single source of their own label and state.
+    $('#q-fly').onclick = () => $('#b-fly').click();
+    $('#q-reset').onclick = () => $('#b-reset').click();
+
+    for (const b of document.querySelectorAll('#speed button'))
+        b.classList.toggle('on', +b.dataset.mult === state.fly.mult);
+    }
+    // profile=collapsed|compact|full , legend=open
+    const wantPf = hash.get('profile');
+    if (wantPf === 'collapsed' || wantPf === 'full') {
+      $('#profile').classList.add(wantPf);
+      for (const b of document.querySelectorAll('#pfsize button'))
+        b.classList.toggle('on', b.dataset.size === wantPf);
+      if (wantPf === 'full')
+        $('#pftitle').textContent = '赛段剖面 · 填色与路线、图例同为爬坡分级';
+    }
+    if (hash.get('legend') === 'open') $('#legend').classList.add('open');
+    const midZ = (F.ele_min + F.ele_max) / 2;
+
+    let lastMVP = null, lastVP = [1, 1];
+
+    function draw(opts = {}){
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      // Size from the container, not the window: the profile strip takes the
+      // bottom of the viewport now, and using innerHeight stretched the 3D view
+      // behind it.
+      const box = $('#view').getBoundingClientRect();
+      const w = Math.max(1, Math.round(box.width * dpr));
+      const h = Math.max(1, Math.round(box.height * dpr));
+      if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+      gl.viewport(0, 0, w, h);
+      gl.clearColor(0.043, 0.051, 0.063, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.enable(gl.DEPTH_TEST);
+
+      // The camera is always the orbit camera. An earlier version handed it to
+      // a chase rig during playback, so the whole map swung around the screen --
+      // what was wanted is the opposite: the map holds still and a marker runs
+      // along the route, the way a route animation reads.
+      const cp = Math.cos(state.pitch), sp = Math.sin(state.pitch);
+      const ctr = [state.tx, state.ty, midZ * state.exag];
+      const eye = [ctr[0] + state.dist * cp * Math.sin(state.yaw),
+                   ctr[1] - state.dist * cp * Math.cos(state.yaw),
+                   ctr[2] + state.dist * sp];
+      const view = M.look(eye, ctr, [0,0,1]);
+      const proj = M.persp(0.80, w/h, diag*0.004, diag*7);
+      const mvp = M.mul(proj, view);
+      lastMVP = mvp; lastVP = [box.width, box.height];
+
+      gl.useProgram(pT);
+      gl.uniformMatrix4fv(gl.getUniformLocation(pT,'uMVP'), false, mvp);
+      gl.uniform1f(gl.getUniformLocation(pT,'uExag'), state.exag);
+      gl.uniform1f(gl.getUniformLocation(pT,'uEleMin'), F.ele_min);
+      gl.uniform1f(gl.getUniformLocation(pT,'uEleMax'), F.ele_max);
+      gl.uniform2f(gl.getUniformLocation(pT,'uGrid'), T.nx, T.ny);
+      gl.uniform2f(gl.getUniformLocation(pT,'uSpan'), F.span_x, F.span_y);
+      gl.uniform1i(gl.getUniformLocation(pT,'uUseTex'), (state.sat && texReady) ? 1 : 0);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, demTex);
+      gl.uniform1i(gl.getUniformLocation(pT,'uDem'), 1);
+      if (tex) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
+                 gl.uniform1i(gl.getUniformLocation(pT,'uTex'), 0); }
+      gl.bindVertexArray(vaoT);
+      // One triangle strip per raster row: 2*nx verts, (ny-1) instances.
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, T.strip_verts, T.instances);
+
+      if (state.road) {
+        gl.useProgram(pR);
+        gl.uniformMatrix4fv(gl.getUniformLocation(pR,'uMVP'), false, mvp);
+        gl.uniform1f(gl.getUniformLocation(pR,'uExag'), state.exag);
+        gl.uniform1f(gl.getUniformLocation(pR,'uHalfW'), R.width_m / 2);
+        gl.uniform1f(gl.getUniformLocation(pR,'uMinPx'), R.min_px);
+        // proj[1][1] is element 5 in column-major order.
+        gl.uniform1f(gl.getUniformLocation(pR,'uPxToWorld'), 2.0 / (h * proj[5]));
+        // The ribbon sits a few metres above ground; nudge it toward the camera
+        // too, or at grazing angles the terrain wins the depth test in patches.
+        // No polygonOffset. Its first argument scales by the polygon's depth
+        // slope, and in a chase view down the road the ribbon is near edge-on,
+        // so that slope is huge -- and it differs between the alternating
+        // triangles of a strip, which pushed every other triangle forward and
+        // left the rest buried. The result was a ladder of transverse stripes
+        // along the whole road. The geometry now clears the terrain on its own
+        // (measured: 0% of kerb samples below the surface, minimum +1.19 m), so
+        // there is nothing left for an offset to fix.
+        gl.bindVertexArray(vaoR);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, R.verts);
+      }
+
+      if (state.mark && mk.length) {
+        gl.useProgram(pM);
+        gl.uniformMatrix4fv(gl.getUniformLocation(pM,'uMVP'), false, mvp);
+        gl.uniform1f(gl.getUniformLocation(pM,'uExag'), state.exag);
+        gl.uniform3f(gl.getUniformLocation(pM,'uColor'), 0.27, 0.77, 0.45);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.depthMask(false);
+        gl.bindVertexArray(vaoM);
+        gl.drawArrays(gl.POINTS, 0, mk.length);
+        gl.depthMask(true);
+        gl.disable(gl.BLEND);
+      }
+      gl.bindVertexArray(null);
+      drawMarkLabels();
+      drawRider();
+      // The profile chart is expensive and almost never changes: redrawing it
+      // every frame during a flight meant 1391 filled polygons plus a DOM
+      // collision pass that reads offsetWidth on 13 labels -- a forced synchronous
+      // layout, sixty times a second. That was the stutter. Pass {profile:false}
+      // for frames where only the camera moved; the cursor is drawn on its own.
+      if (opts.profile === false) drawCursorOnly();
+      else drawProfile();
+    }
+    window.__draw = draw;
+
+    /* ---------- centreline lookup ---------- */
+    // Every other ribbon vertex pair shares a centreline point. Pull them into a
+    // flat array once: the profile cursor, the fly camera and the deep link all
+    // need "where is km X in the scene", and walking the interleaved buffer for
+    // each of those was the alternative.
+    const FLs = R.stride / 4;
+    const nC = R.verts / 2;
+    const cl = {x:new Float32Array(nC), y:new Float32Array(nC),
+                z:new Float32Array(nC), km:new Float32Array(nC)};
+    for (let i = 0; i < nC; i++) {
+      const o = i * 2 * FLs;
+      cl.x[i] = rVerts[o]; cl.y[i] = rVerts[o+1]; cl.z[i] = rVerts[o+2];
+      cl.km[i] = rVerts[o+5] * r.total_km;
+    }
+    const atKm = km => {
+      // The resampling is uniform in distance, so the index is proportional.
+      const t = Math.max(0, Math.min(1, km / r.total_km));
+      return Math.min(nC - 1, Math.round(t * (nC - 1)));
+    };
+
+    /* ---------- stage profile ---------- */
+    const pf = $('#pf'), p2 = pf.getContext('2d');
+    const P = sc.profile;
+    // Top padding has to clear the title bar, and in compact mode there are no
+    // climb boxes to leave room for above the ridge line.
+    // b leaves room for two stacked rows under the axis: km labels, then
+    // supply point names.
+    const PAD = {l:38, r:16, t:30, b:40};
+    const padTop = () => $('#profile').classList.contains('full') ? 30 : 38;
+    // Gradient bands, in the language a rider uses: below 3% is a drag, above
+    // 10% is a wall. These are the fill colours under the curve.
+    // Measured on this route: the first cut put 42% of samples in a grey "flat"
+    // band and 26% in a near-identical blue, so 68% of the chart's area was two
+    // shades of the same thing and the whole profile read as flat blue-grey.
+    // Downhills are also now split -- a -6% descent and a -1% drift are not the
+    // same ride -- and the uphill colours start separating at 2%.
+    // Six bands, not eight. Eight made the runs of constant colour so short
+    // that the per-run fill degenerated back into per-sample stripes -- every
+    // climb came out as a rainbow. Six keeps the runs long enough to read as
+    // bands while still separating descent / flat / climbing / steep, which the
+    // first attempt failed at: its grey and blue were near-identical and
+    // together covered 68% of the chart.
+    const GRADE_BANDS = [
+      [-99, -2.5, '#3f7fb5'],  // descending
+      [-2.5, 1.0, '#6e7681'],  // flat-ish
+      [1.0, 3.5, '#7fa352'],   // drag
+      [3.5, 6, '#c7a93a'],     // climbing
+      [6, 9, '#e0862a'],       // steep
+      [9, 99, '#d4453f'],      // very steep
+    ];
+    const gradeColour = g => {
+      for (const [lo, hi, c] of GRADE_BANDS) if (g >= lo && g < hi) return c;
+      return '#4a5560';
+    };
+    let pfBox = null;
+
+    function drawProfile(){
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      const box = pf.getBoundingClientRect();
+      pfBox = box;
+      const w = Math.max(1, Math.round(box.width * dpr));
+      const h = Math.max(1, Math.round(box.height * dpr));
+      if (pf.width !== w || pf.height !== h) { pf.width = w; pf.height = h; }
+      p2.setTransform(dpr, 0, 0, dpr, 0, 0);
+      p2.clearRect(0, 0, box.width, box.height);
+
+      const W = box.width, H = box.height;
+      const x0 = PAD.l, x1 = W - PAD.r, y0 = padTop(), y1 = H - PAD.b;
+      // Bail out before the adaptive step loops below. When the strip is
+      // collapsed the canvas is display:none and this box is 0x0, so x1-x0 and
+      // y1-y0 both go negative -- and a negative numerator is always below the
+      // spacing threshold, so `step *= 2` ran until Infinity and locked the tab.
+      // Measured: 2000+ iterations at box 0x0 and again mid-transition at 34 px.
+      if (x1 - x0 < 60 || y1 - y0 < 24) { pfMap = null; pfSnap = null; return; }
+      const emin = Math.min(...P.ele), emax = Math.max(...P.ele);
+      const pad = (emax - emin) * 0.12 || 10;
+      const lo = Math.max(0, emin - pad), hi = emax + pad;
+      const X = km => x0 + (km / r.total_km) * (x1 - x0);
+      const Y = e => y1 - ((e - lo) / (hi - lo)) * (y1 - y0);
+
+      // horizontal grid + elevation labels
+      p2.font = '10px -apple-system,"PingFang SC",sans-serif';
+      p2.textBaseline = 'middle';
+      const span = hi - lo;
+      const room = y1 - y0;
+      let stepE = span > 400 ? 200 : span > 180 ? 100 : 50;
+      // Bounded: the guard above makes room positive, but a belt-and-braces cap
+      // means a future layout change cannot reintroduce a hang.
+      for (let g = 0; g < 12 && room / (span / stepE) < 26; g++) stepE *= 2;
+      for (let e = Math.ceil(lo/stepE)*stepE; e <= hi; e += stepE) {
+        const y = Y(e);
+        p2.strokeStyle = 'rgba(255,255,255,.055)';
+        p2.beginPath(); p2.moveTo(x0, y); p2.lineTo(x1, y); p2.stroke();
+        p2.fillStyle = '#6b7480'; p2.textAlign = 'right';
+        p2.fillText(String(e), x0 - 6, y);
+      }
+
+      // Fill by CLIMB CATEGORY, not by per-sample gradient. Gradient banding was
+      // measured at a 481 m median run on this route, which at 12.1 px/km is
+      // 5.8 px of colour per run -- six hues alternating every few pixels read
+      // as rainbow noise, not as information. Category fills are 1-6 km wide and
+      // use exactly the colours the 3D ribbon and the legend use, which is also
+      // the correspondence that was asked for.
+      const catAt = km => {
+        for (const c of (sc.climbs || []))
+          if (km >= c.from_km && km <= c.to_km) return c.colour;
+        return null;
+      };
+      p2.globalAlpha = 0.82;
+      let i = 0;
+      while (i < P.km.length - 1) {
+        const col = catAt(P.km[i]);
+        let j = i;
+        while (j < P.km.length - 1 && catAt(P.km[j]) === col) j++;
+        // Off-climb stretches get a neutral slate so the categorised climbs are
+        // the only thing carrying colour.
+        p2.fillStyle = col || '#39434e';
+        p2.beginPath();
+        p2.moveTo(X(P.km[i]), y1);
+        for (let k = i; k <= j; k++) p2.lineTo(X(P.km[k]), Y(P.ele[k]));
+        p2.lineTo(X(P.km[j]), y1);
+        p2.closePath(); p2.fill();
+        i = j;
+      }
+      p2.globalAlpha = 1;
+
+      // ridge line on top of the fill
+      p2.strokeStyle = 'rgba(255,255,255,.55)'; p2.lineWidth = 1;
+      p2.beginPath();
+      for (let i = 0; i < P.km.length; i++) {
+        const x = X(P.km[i]), y = Y(P.ele[i]);
+        i ? p2.lineTo(x, y) : p2.moveTo(x, y);
+      }
+      p2.stroke();
+
+      // categorised climbs: a coloured bar on the baseline, matching the 3D.
+      // The one the rider is inside gets a taller bar, so the chart says which
+      // climb is happening rather than only where the cursor is.
+      for (const c of (sc.climbs || [])) {
+        const a = X(c.from_km), b = X(c.to_km);
+        const here = state.focusKm != null
+                     && state.focusKm >= c.from_km && state.focusKm <= c.to_km;
+        p2.fillStyle = c.colour;
+        p2.fillRect(a, y1 + 1, Math.max(b - a, 1.5), here ? 5 : 3);
+        if (here) {
+          // A faint column over the active climb's span.
+          p2.save();
+          p2.globalAlpha = 0.16;
+          p2.fillStyle = c.colour;
+          p2.fillRect(a, y0 - 6, Math.max(b - a, 1.5), y1 - y0 + 6);
+          p2.restore();
+        }
+      }
+
+      // km axis
+      p2.strokeStyle = 'rgba(255,255,255,.14)';
+      p2.beginPath(); p2.moveTo(x0, y1); p2.lineTo(x1, y1); p2.stroke();
+      p2.fillStyle = '#6b7480'; p2.textAlign = 'center'; p2.textBaseline = 'top';
+      let stepK = r.total_km > 80 ? 20 : 10;
+      for (let g = 0; g < 12 && (x1 - x0) / (r.total_km / stepK) < 48; g++) stepK *= 2;
+      for (let km = 0; km <= r.total_km; km += stepK) {
+        const x = X(km);
+        p2.strokeStyle = 'rgba(255,255,255,.14)';
+        p2.beginPath(); p2.moveTo(x, y1); p2.lineTo(x, y1 + 4); p2.stroke();
+        p2.fillText(km + (km === 0 ? ' km' : ''), x, y1 + 8);
+      }
+
+      // supply points as ticks rising from the axis
+      for (const m of mk) {
+        const x = X(m.km);
+        p2.strokeStyle = m.reliable ? 'rgba(70,167,88,.85)' : 'rgba(154,163,173,.5)';
+        p2.lineWidth = m.reliable ? 1.5 : 1;
+        p2.beginPath(); p2.moveTo(x, y1); p2.lineTo(x, Y(P.ele[idxKm(m.km)]) - 3);
+        p2.stroke();
+      }
+      p2.lineWidth = 1;
+
+      // The cursor is deliberately NOT drawn here: this canvas state gets
+      // snapshotted below, and a baked-in cursor would smear across the chart
+      // as the flight advances.
+      profileLabels(X, Y, y1);
+      // Keep the mapping so the cursor can be redrawn without recomputing the
+      // whole chart. Also snapshot the chart pixels: drawing the cursor means
+      // erasing the previous one, and re-filling 1391 polygons to do that is
+      // what we are trying to avoid.
+      pfMap = {X, Y, y0, y1, x0, x1};
+      try { pfSnap = p2.getImageData(0, 0, pf.width, pf.height); }
+      catch { pfSnap = null; }
+      // The snapshot above is deliberately cursor-free, but the cursor still
+      // has to appear on this frame. Without this a full redraw -- which is
+      // what a fresh load or a resize does -- left the chart with no cursor
+      // even though the rider was placed, so the two views looked unrelated.
+      if (state.focusKm != null) paintCursor();
+    }
+
+    // Cursor plus a "progress" wash over the distance already covered: colour
+    // banding alone showed the gradient but not how far along the flight was.
+    function paintCursor(){
+      if (!pfMap || state.focusKm == null) return;
+      const {X, Y, y0, y1, x0} = pfMap;
+      const x = X(state.focusKm);
+      if (state.rider != null && x > x0) {
+        p2.save();
+        p2.globalCompositeOperation = 'lighten';
+        p2.fillStyle = 'rgba(255,176,113,.10)';
+        p2.fillRect(x0, y0 - 6, x - x0, y1 - y0 + 6);
+        p2.restore();
+        // A bright edge at the cursor reads as a wavefront; the wash alone was
+        // too subtle to spot at a glance.
+        const grd = p2.createLinearGradient(Math.max(x0, x - 90), 0, x, 0);
+        grd.addColorStop(0, 'rgba(255,176,113,0)');
+        grd.addColorStop(1, 'rgba(255,176,113,.22)');
+        p2.fillStyle = grd;
+        p2.fillRect(Math.max(x0, x - 90), y0 - 6, Math.min(90, x - x0), y1 - y0 + 6);
+      }
+      const e = P.ele[idxKm(state.focusKm)];
+      p2.strokeStyle = 'rgba(255,176,113,.95)';
+      p2.lineWidth = 1.4;
+      p2.beginPath(); p2.moveTo(x, y0 - 6); p2.lineTo(x, y1); p2.stroke();
+      p2.lineWidth = 1;
+      p2.fillStyle = '#ffb071';
+      p2.beginPath(); p2.arc(x, Y(e), 4, 0, 7); p2.fill();
+      p2.strokeStyle = 'rgba(8,10,12,.85)';
+      p2.beginPath(); p2.arc(x, Y(e), 4, 0, 7); p2.stroke();
+    }
+
+    // Repaint the saved chart, then just the cursor on top.
+    let pfMap = null, pfSnap = null;
+    function drawCursorOnly(){
+      if (!pfMap || !pfSnap) { drawProfile(); return; }
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      p2.setTransform(1, 0, 0, 1, 0, 0);
+      p2.putImageData(pfSnap, 0, 0);
+      p2.setTransform(dpr, 0, 0, dpr, 0, 0);
+      paintCursor();
+    }
+
+    const idxKm = km => {
+      const t = Math.max(0, Math.min(1, km / r.total_km));
+      return Math.min(P.km.length - 1, Math.round(t * (P.km.length - 1)));
+    };
+
+    // Climb boxes and supply names as HTML, not canvas text: CJK line breaking
+    // and a background plate are free in CSS and fiddly in a 2D context.
+    const pfover = $('#pfover');
+    let pfBuilt = false;
+    function profileLabels(X, Y, y1){
+      if (pfBuilt) {
+        // Climb boxes need real 2D collision avoidance: two climbs 4 km apart on
+        // a 111 km axis are ~40 px apart, narrower than one box. Per-row
+        // bookkeeping alone was not enough -- a label whose climb tops out near
+        // the ceiling gets clamped, and two different rows then clamp to the same
+        // y and overlap anyway. So track placed rectangles and test against
+        // them, including the strip's own title.
+        // The ceiling has to clear the title bar (34 px) plus the box's own
+        // height, or a climb that tops out near the chart's upper edge gets
+        // clamped onto the 赛段剖面 / size buttons. Reserve the bar's full
+        // width too: the size buttons sit further right than the title.
+        const CEIL = 38, BOXH = 28;
+        const placed = [[0, 330, 0, 34]];     // #pfbar: title + size buttons
+        const hits = (a, b, t, bt) => placed.some(
+          ([pa, pb, pt, pbt]) => a < pb && b > pa && t < pbt && bt > pt);
+        for (const el of pfover.children) {
+          const km = parseFloat(el.dataset.km);
+          const x = X(km);
+          el.style.left = x + 'px';
+          // Supply names go BELOW the km axis labels, not on the same line:
+          // both were at y1+8/9 and "0 km" sat on top of "出发".
+          if (el.dataset.ele === undefined) { el.style.top = (y1 + 21) + 'px'; continue; }
+          const half = (el.offsetWidth || 92) / 2 + 3;
+          const anchor = Y(parseFloat(el.dataset.ele)) - 7;
+          let top = null, shift = 0;
+          // Prefer just above the summit, then step away vertically. Candidates
+          // are clamped to the ceiling, and for a summit already near the top of
+          // the chart every upward offset clamps to the same y -- so the
+          // downward ones have to be there too, or two neighbouring climbs both
+          // land on the ceiling and overlap.
+          outer:
+          for (const dx of [0, -0.55, 0.55, -1.1, 1.1]) {
+            for (const cand of [0, -30, -60, 26, 54, 82, 110]) {
+              const t = Math.max(CEIL, anchor + cand);
+              const sx = x + dx * half * 2;
+              if (sx - half < 2 || sx + half > (X(r.total_km) + PAD.r)) continue;
+              if (!hits(sx - half, sx + half, t - BOXH, t)) {
+                top = t; shift = dx * half * 2; break outer;
+              }
+            }
+          }
+          if (top === null) top = Math.max(CEIL, anchor);
+          const fx = x + shift;
+          el.style.left = fx + 'px';
+          placed.push([fx - half, fx + half, top - BOXH, top]);
+          el.style.top = top + 'px';
+        }
+        return;
+      }
+      const frag = document.createDocumentFragment();
+      for (const c of (sc.climbs || [])) {
+        const mid = (c.from_km + c.to_km) / 2;
+        const d = document.createElement('div');
+        d.className = 'clab';
+        d.dataset.km = mid; d.dataset.ele = c.top_m;
+        d.style.borderColor = c.colour;
+        d.innerHTML = `<b style="color:${c.colour}">${c.cat}</b>`
+          + `<s>${c.len_km.toFixed(1)}km ${c.grade_pct.toFixed(1)}% +${Math.round(c.gain_m)}m</s>`;
+        frag.appendChild(d);
+      }
+      for (const m of mk) {
+        const d = document.createElement('div');
+        d.className = 'mlab';
+        d.dataset.km = m.km;
+        d.textContent = m.name;
+        if (!m.reliable) d.style.opacity = '.6';
+        frag.appendChild(d);
+      }
+      pfover.appendChild(frag);
+      pfBuilt = true;
+      profileLabels(X, Y, y1);
+    }
+
+    /* ---------- the moving rider ---------- */
+    // An HTML pip projected the same way as the supply markers. It is the thing
+    // that moves during playback -- the terrain and the camera do not.
+    let riderEl = null;
+    function drawRider(){
+      if (!riderEl) {
+        riderEl = document.createElement('div');
+        riderEl.id = 'rider';
+        marksBox.appendChild(riderEl);
+      }
+      if (state.rider == null || !lastMVP) { riderEl.style.display = 'none'; return; }
+      const i = atKm(state.rider);
+      const X = cl.x[i], Y = cl.y[i], Z = cl.z[i] * state.exag, A = lastMVP;
+      const cw = A[3]*X + A[7]*Y + A[11]*Z + A[15];
+      if (cw <= 0.0001) { riderEl.style.display = 'none'; return; }
+      const cx = (A[0]*X + A[4]*Y + A[8]*Z + A[12]) / cw;
+      const cy = (A[1]*X + A[5]*Y + A[9]*Z + A[13]) / cw;
+      const [vw, vh] = lastVP;
+      riderEl.style.display = '';
+      riderEl.style.left = ((cx * 0.5 + 0.5) * vw) + 'px';
+      riderEl.style.top = ((0.5 - cy * 0.5) * vh) + 'px';
+      riderEl.dataset.km = state.rider.toFixed(1);
+    }
+
+    /* ---------- marker labels over the 3D view ---------- */
+    const marksBox = $('#marks');
+    let markEls = null;
+    function drawMarkLabels(){
+      if (!lastMVP) return;
+      if (!markEls) {
+        markEls = mk.map(m => {
+          const dot = document.createElement('div');
+          dot.className = 'dot';
+          dot.style.background = m.reliable ? '#46a758' : '#9aa3ad';
+          const lab = document.createElement('div');
+          lab.className = 'm' + (m.reliable ? '' : ' soft');
+          lab.innerHTML = `${m.mark}&nbsp;${m.name}<i>${m.km.toFixed(1)}km</i>`;
+          marksBox.append(dot, lab);
+          return {dot, lab};
+        });
+      }
+      const [vw, vh] = lastVP;
+      mk.forEach((m, i) => {
+        const {dot, lab} = markEls[i];
+        if (!state.mark) { dot.style.display = lab.style.display = 'none'; return; }
+        // Project to clip space by hand; w <= 0 means behind the camera.
+        const X = m.x, Y = m.y, Z = m.z * state.exag, A = lastMVP;
+        const cw = A[3]*X + A[7]*Y + A[11]*Z + A[15];
+        if (cw <= 0.0001) { dot.style.display = lab.style.display = 'none'; return; }
+        const cx = (A[0]*X + A[4]*Y + A[8]*Z + A[12]) / cw;
+        const cy = (A[1]*X + A[5]*Y + A[9]*Z + A[13]) / cw;
+        if (cx < -1.3 || cx > 1.3 || cy < -1.3 || cy > 1.3) {
+          dot.style.display = lab.style.display = 'none'; return;
+        }
+        const px = (cx * 0.5 + 0.5) * vw, py = (0.5 - cy * 0.5) * vh;
+        dot.style.display = lab.style.display = '';
+        dot.style.left = px + 'px'; dot.style.top = py + 'px';
+        lab.style.left = px + 'px'; lab.style.top = (py - 8) + 'px';
+      });
+    }
+
+    /* ---------- interaction ---------- */
+    let drag = null;
+    cv.addEventListener('pointerdown', e => {
+      drag = {x:e.clientX, y:e.clientY, pan:e.shiftKey, tx:state.tx, ty:state.ty,
+              yaw:state.yaw, pitch:state.pitch};
+      cv.classList.add('drag'); cv.setPointerCapture(e.pointerId);
+    });
+    cv.addEventListener('pointermove', e => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (drag.pan) {
+        const k = state.dist / Math.max(lastVP[1], 1) * 1.4;
+        state.tx = drag.tx - (dx*Math.cos(state.yaw) + dy*Math.sin(state.yaw)) * k;
+        state.ty = drag.ty - (dx*Math.sin(state.yaw) - dy*Math.cos(state.yaw)) * k;
+      } else {
+        state.yaw = drag.yaw + dx * 0.006;
+        state.pitch = Math.max(0.05, Math.min(1.52, drag.pitch + dy * 0.005));
+      }
+      draw();
+    });
+    const stop = e => { drag = null; cv.classList.remove('drag'); };
+    cv.addEventListener('pointerup', stop);
+    cv.addEventListener('pointercancel', stop);
+    cv.addEventListener('wheel', e => {
+      e.preventDefault();
+      state.dist = Math.max(diag*0.03, Math.min(diag*3.2,
+        state.dist * Math.exp(e.deltaY * 0.0012)));
+      draw();
+    }, {passive:false});
+    addEventListener('resize', draw);
+
+    /* ---------- profile <-> 3D linking ---------- */
+    const kmAtX = clientX => {
+      const b = pfBox || pf.getBoundingClientRect();
+      const x0 = PAD.l, x1 = b.width - PAD.r;
+      const t = (clientX - b.left - x0) / Math.max(x1 - x0, 1);
+      return Math.max(0, Math.min(r.total_km, t * r.total_km));
+    };
+    const readout = km => {
+      if (km == null) { $('#pfread').innerHTML = ''; return; }
+      const i = idxKm(km), g = P.grade[i];
+      const c = (sc.climbs || []).find(c => km >= c.from_km && km <= c.to_km);
+      // While flying, show the rate and how long the rest of the route will
+      // take at it -- the number that answers "why is this taking so long".
+      const fly = state.fly.on
+        ? ` · <span style="color:var(--warm)">${state.fly.mult}× `
+          + `${Math.round((r.total_km - km) / (state.fly.kmh * state.fly.mult) * 3600)}s</span>`
+        : '';
+      $('#pfread').innerHTML =
+        `<b>${km.toFixed(1)}</b> km · <b>${Math.round(P.ele[i])}</b> m · `
+        + `坡度 <b>${g > 0 ? '+' : ''}${g.toFixed(1)}%</b>`
+        + (c ? ` · <span style="color:${c.colour}">${c.cat}爬坡</span>` : '')
+        + fly;
+    };
+    let pfDrag = false;
+    const pfMove = e => {
+      state.focusKm = kmAtX(e.clientX);
+      readout(state.focusKm);
+      // Dragging also moves the 3D camera, so the two views stay in step; a
+      // plain hover only moves the cursor, or scrubbing would yank the camera
+      // every time the pointer crossed the strip.
+      if (pfDrag && !state.fly.on) {
+        const i = atKm(state.focusKm);
+        state.tx = cl.x[i]; state.ty = cl.y[i];
+      }
+      if (pfDrag && state.fly.on) state.fly.km = state.focusKm;
+      draw();
+    };
+    pf.addEventListener('pointerdown', e => {
+      pfDrag = true; pf.setPointerCapture(e.pointerId); pfMove(e);
+    });
+    pf.addEventListener('pointermove', pfMove);
+    pf.addEventListener('pointerup', () => { pfDrag = false; });
+    pf.addEventListener('pointerleave', () => {
+      if (pfDrag) return;
+      state.focusKm = null; readout(null); draw();
+    });
+
+    /* ---------- fly mode ---------- */
+    let flyTimer = null, flyLast = 0;
+    function flyTick(ts){
+      if (!state.fly.on) return;
+      const dt = flyLast ? Math.min((ts - flyLast) / 1000, 0.1) : 0;
+      flyLast = ts;
+      state.fly.km += state.fly.kmh * state.fly.mult / 3600 * dt;
+      if (state.fly.km >= r.total_km) state.fly.km = 0;   // loop, it is a loop
+      state.focusKm = state.fly.km;
+      state.rider = state.fly.km;
+      readout(state.focusKm);
+      draw({profile: false});
+      flyTimer = requestAnimationFrame(flyTick);
+    }
+    $('#b-fly').onclick = () => {
+      state.fly.on = !state.fly.on;
+      $('#b-fly').classList.toggle('on', state.fly.on);
+      $('#b-fly').textContent = state.fly.on ? '停止飞行' : '沿路线飞行';
+      $('#q-fly').classList.toggle('on', state.fly.on);
+      $('#q-fly').textContent = state.fly.on ? '停止' : '飞行';
+      if (state.fly.on) {
+        if (state.focusKm != null) state.fly.km = state.focusKm;
+        state.rider = state.fly.km;
+        flyLast = 0; flyTimer = requestAnimationFrame(flyTick);
+      } else {
+        cancelAnimationFrame(flyTimer); flyTimer = null;
+        state.rider = null;
+        draw();
+      }
+    };
+
+    /* ---------- profile size ---------- */
+    const setProfileSize = size => {
+      const el = $('#profile');
+      el.classList.remove('collapsed', 'full');
+      if (size !== 'compact') el.classList.add(size);
+      for (const b of document.querySelectorAll('#pfsize button'))
+        b.classList.toggle('on', b.dataset.size === size);
+      $('#pftitle').textContent = size === 'full'
+        ? '赛段剖面 · 填色与路线、图例同为爬坡分级' : '赛段剖面';
+      // The canvas is sized from its box, so it has to be redrawn after the
+      // height changes -- and after the CSS transition, or it measures the old
+      // height and the chart ends up the wrong size.
+      draw();
+      setTimeout(draw, 230);
+    };
+    for (const b of document.querySelectorAll('#pfsize button'))
+      b.onclick = () => setProfileSize(b.dataset.size);
+    // The collapsed row proxies the two actions worth reaching without
+    // expanding; keeping them as separate elements means the full panel's
+    // buttons stay the single source of their own label and state.
+    $('#q-fly').onclick = () => $('#b-fly').click();
+    $('#q-reset').onclick = () => $('#b-reset').click();
+
+    for (const b of document.querySelectorAll('#speed button'))
+      b.onclick = () => {
+        state.fly.mult = +b.dataset.mult;
+        for (const o of document.querySelectorAll('#speed button'))
+          o.classList.toggle('on', o === b);
+        readout(state.focusKm);
+      };
+
+    const tog = (id, key) => $(id).onclick = () => {
+      state[key] = !state[key];
+      $(id).classList.toggle('on', state[key]); draw();
+    };
+    tog('#b-sat','sat'); tog('#b-road','road'); tog('#b-mark','mark');
+    $('#b-exag').onclick = () => {
+      state.exag = state.exag > 1.5 ? 1.0 : 2.0;
+      $('#b-exag').classList.toggle('on', state.exag > 1.5);
+      $('#b-exag').textContent = state.exag > 1.5 ? '垂直 ×2' : '垂直 ×1';
+      draw();
+    };
+    $('#b-reset').onclick = () => {
+      // Recompute the fit rather than restoring the distance captured at load:
+      // the window may well have been resized since.
+      Object.assign(state, state.home, {dist: fitDist()});
+      draw();
+    };
+
+    step(100);
+    draw();
+    setTimeout(() => $('#load').classList.add('gone'), 180);
+    console.log(`scene: ${T.nx}x${T.ny} raster (${(T.bytes/1e6).toFixed(2)} MB), `
+      + `${T.instances} strips, ${mk.length} markers, `
+      + `${(sc.climbs||[]).length} climbs`);
+    window.__sceneReady = true;
+  } catch (e) {
+    fail('载入失败：' + e.message);
+  }
+})();
+</script>
+</body>
+</html>

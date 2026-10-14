@@ -581,12 +581,18 @@ const state = {
     $('#rname').textContent = r.name || '三维地形预览';
     $('#rsub').textContent =
       `${r.is_loop ? '环线' : '线路'} · DEM ${r.dem.m_per_px} m 栅格 · 影像 ${sc.imagery.m_per_px} m/px`;
+    // Ascent carries its method in a tooltip and a footnote marker; see
+    // ascent_method in scene.json for why.
     $('#stats').innerHTML = [
-      ['总里程', r.total_km.toFixed(2), 'km'],
-      ['累计爬升', r.ascent_m, 'm'],
-      ['最高点', r.ele_max.toFixed(0), 'm'],
-      ['最低点', r.ele_min.toFixed(0), 'm'],
-    ].map(([k,v,u]) => `<div>${k}<b>${v}<span style="font-size:11px;color:var(--dim)"> ${u}</span></b></div>`).join('');
+      ['总里程', r.total_km.toFixed(2), 'km', ''],
+      ['累计爬升', r.ascent_m, 'm', r.ascent_method || ''],
+      ['最高点', r.ele_max.toFixed(0), 'm', ''],
+      ['最低点', r.ele_min.toFixed(0), 'm', ''],
+    ].map(([k,v,u,tip]) =>
+      `<div${tip ? ` title="${tip}"` : ''}>${k}${tip ? '<sup style="color:#6b7480">†</sup>' : ''}`
+      + `<b>${v}<span style="font-size:11px;color:var(--dim)"> ${u}</span></b></div>`).join('');
+    if (r.ascent_method)
+      $('#rsub').textContent += ` · 爬升口径 ${r.ascent_method}`;
 
     $('#cats').innerHTML = (sc.climbs||[]).length
       ? sc.climb_rule.thresholds.map(t => {

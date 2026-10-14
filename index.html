@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>route-studio · GPX 转三维线路图</title>
+<style>
+  :root{--bg:#0b0d10;--ink:#e8eaed;--dim:#9aa3ad;--line:#1e242c;--warm:#ffb071}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.7 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  .wrap{max-width:760px;margin:0 auto;padding:56px 24px 80px}
+  h1{margin:0 0 6px;font-size:28px;letter-spacing:.5px}
+  .lede{color:var(--dim);font-size:14px;margin-bottom:34px}
+  a{color:var(--warm)}
+
+  .card{display:block;text-decoration:none;color:inherit;
+    border:1px solid var(--line);border-radius:12px;overflow:hidden;
+    margin-bottom:18px;transition:border-color .15s}
+  .card:hover{border-color:#3a4654}
+  .card img{display:block;width:100%;height:auto}
+  .card .body{padding:14px 16px}
+  .card h2{margin:0 0 3px;font-size:17px}
+  .card .meta{color:var(--dim);font-size:12.5px;
+    font-variant-numeric:tabular-nums}
+  .card .go{color:var(--warm);font-size:12.5px;margin-top:7px}
+
+  .alt{display:flex;gap:10px;flex-wrap:wrap;margin:-6px 0 30px}
+  .alt a{text-decoration:none;font-size:12.5px;border:1px solid var(--line);
+    padding:6px 12px;border-radius:7px;color:var(--dim)}
+  .alt a:hover{border-color:#3a4654;color:var(--ink)}
+
+  h3{font-size:14px;margin:30px 0 8px;letter-spacing:.3px}
+  p,li{color:#c3cad2;font-size:13.5px}
+  code{background:#161b22;border:1px solid var(--line);border-radius:4px;
+    padding:1px 5px;font-size:12.5px}
+  pre{background:#0f1317;border:1px solid var(--line);border-radius:9px;
+    padding:12px 14px;overflow-x:auto;font-size:12.5px}
+  pre code{background:none;border:none;padding:0}
+  .note{color:#6b7480;font-size:12px;border-top:1px solid var(--line);
+    margin-top:34px;padding-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>route-studio</h1>
+  <div class="lede">
+    把一条 GPX 变成能看清地形、看清路的线路图：三维飞越视图 + 赛段剖面 + 路书总览。
+    渲染目标是环法转播里那种 flyover。
+  </div>
+
+  <a class="card" href="routes/tianlu/site/terrain.html">
+    <img src="shots/overview.jpg" alt="进化天路三维地形图">
+    <div class="body">
+      <h2>进化天路</h2>
+      <div class="meta">杭州萧山 · 环线 111.24 km · 累计爬升 2174 m · 13 处入级爬坡</div>
+      <div class="go">打开三维地形 + 赛段剖面 →</div>
+    </div>
+  </a>
+
+  <div class="alt">
+    <a href="routes/tianlu/site/roadbook.html">路书总览（时刻表 / 爬坡 / 无补给空档）</a>
+    <a href="https://github.com/wangyiyun-hub/route-studio">源码</a>
+  </div>
+
+  <h3>需要什么</h3>
+  <p>
+    三维视图要 <strong>WebGL2</strong>，手机上（尤其微信内置浏览器）可能不支持，
+    会显示提示并给一个链接跳到路书页。路书页是 2D canvas，没有这个要求。
+    首次打开要载入 6 MB（地形栅格 2.5 MB + 卫星影像 3.3 MB）。
+  </p>
+
+  <h3>自己跑一条</h3>
+<pre><code>git clone https://github.com/wangyiyun-hub/route-studio
+cd route-studio
+pip3 install --user Pillow numpy
+
+./route-studio new myroute ~/Downloads/xxx.gpx
+$EDITOR routes/myroute/route.toml   # 唯一手工编辑的文件
+./route-studio all myroute          # 抓 DEM + 影像，推导剖面，规划，构建
+./route-studio serve myroute</code></pre>
+  <p>
+    <code>route.toml</code> 只放测不出来的东西：标题、爬坡分级阈值、渲染参数，
+    以及补给点（哪儿算补给、靠不靠得住、停多久）。其余一律计算 ——
+    坐标、海拔、剖面、分段、无补给空档、时刻表。
+  </p>
+
+  <h3>数据与口径</h3>
+  <ul>
+    <li>高程：AWS terrain-tiles（terrarium 编码的 SRTM 30 m），z13 ≈ 16.5 m/px</li>
+    <li>影像：Esri World Imagery，z16 ≈ 2.07 m/px，WGS-84 与 GPX 同基准</li>
+    <li>爬坡分级是<strong>本地重标定</strong>的，非 ASO 原口径 —— ASO 的 HC 门槛是
+        单段爬升 1000 m，这条线最大单段 363 m，套原口径会把 14 段全压进「3 级及以下」。
+        页面上附了换算说明。</li>
+    <li>累计爬升是方法相关量，页面标了口径（DEM 栅格 80 m 步长逐点累加）。</li>
+  </ul>
+
+  <div class="note">
+    路线数据来自 iGPSPORT 路书，原始 <code>&lt;ele&gt;</code> 全为 0，
+    所有高程来自 DEM。地形的几何精度上限就是 SRTM 的 30 m；
+    「逼真」主要来自卫星影像，不是来自高程。
+  </div>
+</div>
+</body>
+</html>
