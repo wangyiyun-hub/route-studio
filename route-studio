@@ -3,7 +3,7 @@
 #
 #   route-studio new <name> <file.gpx>   parse, fetch DEM + imagery, write a stub
 #   route-studio build <name>            rebuild the scene from data/ + route.toml
-#   route-studio all <name>              fetch what is missing, then build
+#   route-studio all <name>              fetch what is missing, plan, build
 #   route-studio serve [name]            http server on the built site
 #   route-studio shot <name> [tag] [#…]  screenshot through Windows Edge
 #   route-studio list                    routes present
@@ -41,6 +41,7 @@ case "$cmd" in
   dem)   $PY "$H/src/fetch_dem.py" --route "${1:?route}" ;;
   sat)   $PY "$H/src/fetch_sat.py" --route "${1:?route}" "${@:2}" ;;
   derive) $PY "$H/src/derive.py" --route "${1:?route}" ;;
+  plan)  $PY "$H/src/plan.py" --route "${1:?route}" ;;
 
   build)
     name="${1:?route}"
@@ -54,6 +55,9 @@ case "$cmd" in
     [ -f "$H/routes/$name/data/dem.npz" ] || $PY "$H/src/fetch_dem.py" --route "$name"
     [ -f "$H/routes/$name/data/sat.jpg" ] || $PY "$H/src/fetch_sat.py" --route "$name"
     [ -f "$H/routes/$name/data/profile.json" ] || $PY "$H/src/derive.py" --route "$name"
+    # The plan is cheap and depends on route.toml, so always refresh it --
+    # editing a supply entry should not need a separate command.
+    $PY "$H/src/plan.py" --route "$name"
     "$0" build "$name"
     ;;
 
