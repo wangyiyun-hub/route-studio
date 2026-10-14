@@ -23,9 +23,24 @@
   .panel{position:absolute;background:rgba(11,13,16,.82);backdrop-filter:blur(12px);
     border:1px solid var(--line);border-radius:10px}
 
-  #hud{top:16px;left:16px;padding:14px 16px;max-width:320px}
-  #hud h1{margin:0 0 2px;font-size:19px;letter-spacing:.5px;font-weight:700}
-  #hud .sub{color:var(--dim);font-size:12px;margin-bottom:10px}
+  /* Every overlay collapses. Together they covered all four corners of the
+     map; the terrain is what the page is for, so each panel keeps a small
+     always-visible header and folds its body away. */
+  .fold > .hd{display:flex;align-items:center;gap:8px;cursor:pointer;
+    padding:9px 12px;user-select:none;white-space:nowrap}
+  .fold > .hd:hover{background:rgba(255,255,255,.04)}
+  .fold > .hd .car{color:var(--dim);font-size:10px;margin-left:auto;
+    transition:transform .18s;padding-left:4px}
+  .fold.open > .hd .car{transform:rotate(180deg)}
+  .fold > .bd{display:none}
+  .fold.open > .bd{display:block}
+
+  #hud{top:16px;left:16px;max-width:330px;overflow:hidden}
+  #hud .hd h1{margin:0;font-size:15px;letter-spacing:.5px;font-weight:700}
+  #hud .hd .km{color:var(--warm);font-size:12px;
+    font-variant-numeric:tabular-nums;font-weight:600}
+  #hud .bd{padding:0 16px 13px}
+  #hud .sub{color:var(--dim);font-size:11.5px;margin-bottom:10px}
   #stats{display:grid;grid-template-columns:repeat(2,1fr);gap:7px 14px}
   #stats div{font-size:12px;color:var(--dim)}
   #stats b{display:block;font-size:17px;color:var(--ink);font-weight:650;
@@ -36,18 +51,12 @@
      for -- as a strip down the middle. Collapsed by default; the full climb
      table lives on the roadbook page. */
   #legend{top:16px;right:16px;font-size:12px;overflow:hidden}
-  #legend .hd{display:flex;align-items:center;gap:9px;cursor:pointer;
-    padding:9px 12px;user-select:none;white-space:nowrap}
-  #legend .hd:hover{background:rgba(255,255,255,.04)}
   #legend .hd .t{color:var(--dim);font-size:11px;letter-spacing:.4px}
   #legend .hd .mini{display:flex;gap:3px;align-items:center}
   #legend .hd .mini i{width:13px;height:4px;border-radius:2px;display:block}
-  #legend .hd .car{color:var(--dim);font-size:10px;margin-left:2px;
-    transition:transform .18s}
-  #legend.open .hd .car{transform:rotate(180deg)}
   #legend.open .hd .mini{display:none}
-  #legend .bd{display:none;padding:0 14px 12px;min-width:200px}
-  #legend.open .bd{display:block}
+  /* Display is handled by the shared .fold rules; this only adds padding. */
+  #legend .bd{padding:0 14px 12px;min-width:200px}
   #legend .row{display:flex;align-items:center;gap:8px;margin:5px 0}
   #legend .sw{width:22px;height:4px;border-radius:2px;flex:none}
   #legend .n{color:var(--dim);margin-left:auto;font-variant-numeric:tabular-nums}
@@ -55,8 +64,19 @@
     padding-top:8px;border-top:1px solid var(--line);line-height:1.45;
     max-width:290px;white-space:normal}
 
-  #ctl{bottom:16px;left:16px;padding:10px 12px;display:flex;gap:6px;flex-wrap:wrap;
-    max-width:340px}
+  /* The controls cannot fold completely away -- there would be nothing left to
+     click to get them back -- so collapsed they keep a single compact row. */
+  #ctl{bottom:16px;left:16px;overflow:hidden;max-width:360px}
+  /* `display` goes on the .open rule, not on `#ctl .bd`. An ID selector there
+     (specificity 1-1-0) beat `.fold > .bd{display:none}` (1-0-0), so this
+     panel's body stayed flex and the collapse silently did nothing -- the
+     caret rotated and nothing else happened. #hud and #tip set no display at
+     all, which is why only this one broke. */
+  #ctl .bd{padding:0 12px 11px;gap:6px;flex-wrap:wrap}
+  #ctl.open > .bd{display:flex}
+  #ctl .hd .quick{display:flex;gap:5px;margin-left:4px}
+  #ctl.open .hd .quick{display:none}
+  #ctl .hd .quick button{padding:3px 8px;font-size:10.5px;border-radius:5px}
   button{background:#161b22;color:var(--ink);border:1px solid var(--line);
     border-radius:7px;padding:6px 11px;font-size:12px;cursor:pointer;
     font-family:inherit}
@@ -64,8 +84,9 @@
   button.on{background:var(--warm);color:#1a1005;border-color:var(--warm);
     font-weight:600}
 
-  #tip{bottom:16px;right:16px;padding:9px 12px;font-size:11px;color:var(--dim);
-    max-width:260px;line-height:1.6}
+  #tip{bottom:16px;right:16px;font-size:11px;color:var(--dim);
+    max-width:280px;overflow:hidden}
+  #tip .bd{padding:0 12px 10px;line-height:1.6}
   #tip kbd{background:#161b22;border:1px solid var(--line);border-radius:4px;
     padding:1px 5px;font-size:10px;font-family:inherit}
 
@@ -89,7 +110,7 @@
     border-top:1px solid var(--line);background:#0e1114;
     transition:height .2s ease}
   #profile.collapsed{height:34px}
-  #profile.full{height:250px}
+  #profile.full{height:264px}
   #profile.collapsed #pf,#profile.collapsed #pfover{display:none}
   /* Climb boxes only when there is room for them. */
   #profile:not(.full) #pfover .clab{display:none}
@@ -166,14 +187,20 @@
   <canvas id="gl"></canvas>
   <div id="marks"></div>
 
-  <div id="hud" class="panel">
-    <h1 id="rname">进化天路</h1>
-    <div class="sub" id="rsub">三维地形预览</div>
-    <div id="stats"></div>
+  <div id="hud" class="panel fold">
+    <div class="hd">
+      <h1 id="rname">进化天路</h1>
+      <span class="km" id="hud-km"></span>
+      <span class="car">▾</span>
+    </div>
+    <div class="bd">
+      <div class="sub" id="rsub">三维地形预览</div>
+      <div id="stats"></div>
+    </div>
   </div>
 
-  <div id="legend" class="panel">
-    <div class="hd" id="legend-hd">
+  <div id="legend" class="panel fold">
+    <div class="hd">
       <span class="t">爬坡分级</span>
       <span class="mini" id="legend-mini"></span>
       <span class="car">▾</span>
@@ -184,25 +211,41 @@
     </div>
   </div>
 
-  <div id="ctl" class="panel">
-    <button id="b-sat" class="on">卫星影像</button>
-    <button id="b-road" class="on">路线</button>
-    <button id="b-mark" class="on">补给点</button>
-    <button id="b-exag">垂直 ×2</button>
-    <button id="b-fly">沿路线飞行</button>
-    <span id="speed" title="飞行倍速">
-      <button data-mult="1">1×</button>
-      <button data-mult="2">2×</button>
-      <button data-mult="4" class="on">4×</button>
-      <button data-mult="8">8×</button>
-    </span>
-    <button id="b-reset">复位视角</button>
-    <a href="roadbook.html" style="text-decoration:none"><button>路书总览</button></a>
+  <div id="ctl" class="panel fold">
+    <div class="hd">
+      <span style="color:var(--dim);font-size:11px;letter-spacing:.4px">控制</span>
+      <span class="quick">
+        <button id="q-fly">飞行</button>
+        <button id="q-reset">复位</button>
+      </span>
+      <span class="car">▾</span>
+    </div>
+    <div class="bd">
+      <button id="b-sat" class="on">卫星影像</button>
+      <button id="b-road" class="on">路线</button>
+      <button id="b-mark" class="on">补给点</button>
+      <button id="b-exag">垂直 ×2</button>
+      <button id="b-fly">沿路线飞行</button>
+      <span id="speed" title="飞行倍速">
+        <button data-mult="1">1×</button>
+        <button data-mult="2">2×</button>
+        <button data-mult="4" class="on">4×</button>
+        <button data-mult="8">8×</button>
+      </span>
+      <button id="b-reset">复位视角</button>
+      <a href="roadbook.html" style="text-decoration:none"><button>路书总览</button></a>
+    </div>
   </div>
 
-  <div id="tip" class="panel">
-    拖动旋转 · 滚轮缩放 · <kbd>Shift</kbd>+拖动平移 · 剖面上拖动可定位
-    <span id="prov" style="display:block;margin-top:5px;color:#6b7480"></span>
+  <div id="tip" class="panel fold">
+    <div class="hd">
+      <span style="font-size:11px;letter-spacing:.4px">操作 / 数据源</span>
+      <span class="car">▾</span>
+    </div>
+    <div class="bd">
+      拖动旋转 · 滚轮缩放 · <kbd>Shift</kbd>+拖动平移 · 剖面上拖动可定位
+      <span id="prov" style="display:block;margin-top:5px;color:#6b7480"></span>
+    </div>
   </div>
 </div>
 
@@ -427,6 +470,9 @@ function prog(vsSrc, fsSrc, tag){
 }
 
 const state = {
+  // pitch stays at 0.52 (~30 deg). Raising it to 0.78 to fill the empty sky
+  // pushed the DEM's far edge into the apex of the frustum and the rectangular
+  // tile rendered as a spike. Empty sky is the lesser problem.
   yaw: -0.62, pitch: 0.52, dist: 0, tx: 0, ty: 0,
   exag: 1.0, sat: true, road: true, mark: true,
   home: null,
@@ -558,32 +604,65 @@ const state = {
     $('#legend-mini').innerHTML = sc.climb_rule.thresholds
       .filter(t => (sc.climbs || []).some(c => c.cat === t.cat))
       .map(t => `<i style="background:${t.colour}"></i>`).join('');
-    $('#legend-hd').onclick = () => $('#legend').classList.toggle('open');
+    // One handler for every fold. The 3D view is sized from its box, so a panel
+    // opening does not change it -- but the terrain fit does depend on the
+    // viewport, and the panels overlay rather than push, so no redraw needed.
+    for (const el of document.querySelectorAll('.fold'))
+      el.querySelector('.hd').onclick = e => {
+        // Clicks on the quick buttons must not also toggle the panel.
+        if (e.target.closest('button') && e.target.closest('.quick')) return;
+        el.classList.toggle('open');
+      };
+
+    // Collapsed, the HUD header still carries the one number that matters.
+    $('#hud-km').textContent = `${r.total_km.toFixed(1)} km · +${r.ascent_m} m`;
     $('#prov').textContent = `地形 ${r.dem.source} · 影像 ${sc.imagery.attribution}（${sc.imagery.datum}）`;
 
     /* ---------- camera ---------- */
     const diag = Math.hypot(F.span_x, F.span_y);
+    // Route extent, straight off the ribbon buffer (x,y are the first two
+    // floats of each vertex). Needed before the centreline cache is built.
+    let rxMin = Infinity, rxMax = -Infinity, ryMin = Infinity, ryMax = -Infinity;
+    {
+      const st = R.stride / 4;
+      for (let i = 0; i < R.verts; i++) {
+        const x = rVerts[i * st], y = rVerts[i * st + 1];
+        if (x < rxMin) rxMin = x; if (x > rxMax) rxMax = x;
+        if (y < ryMin) ryMin = y; if (y > ryMax) ryMax = y;
+      }
+    }
+    const routeSpanX = rxMax - rxMin, routeSpanY = ryMax - ryMin;
+    const routeCx = (rxMax + rxMin) / 2, routeCy = (ryMax + ryMin) / 2;
     // Fit the whole box into whatever viewport we actually got. A fixed multiple
     // of the diagonal only frames correctly at one aspect ratio: with the
     // profile strip taking 250 px off the bottom, a tall-but-narrow window left
     // the terrain as a sliver in the middle.
+    // Frame the ROUTE, not the DEM. The raster is padded 2 km beyond the track
+    // on every side and the track does not fill what is left, so fitting the
+    // whole bbox put the ride at 72% x 79% of the frame and spent the rest of
+    // the viewport on empty ground.
     const fitDist = () => {
       const b = $('#view').getBoundingClientRect();
       const fovy = 0.80;
       const asp = Math.max(b.width / Math.max(b.height, 1), 0.01);
-      // Looking down at `pitch`, the box's north-south extent is foreshortened
-      // to span_y * cos(pitch) on screen, while its height contributes
-      // span_z * sin(pitch). A flat 1.35x headroom instead of this left the
-      // terrain filling about half the viewport with empty sky above and below.
+      // Looking down at `pitch`, the north-south extent is foreshortened to
+      // span * cos(pitch) on screen while the relief contributes
+      // height * sin(pitch).
       const relief = (F.ele_max - F.ele_min) * state.exag;
-      const hOnScreen = F.span_y * Math.cos(state.pitch)
+      const hOnScreen = routeSpanY * Math.cos(state.pitch)
                         + relief * Math.sin(state.pitch);
       const needV = (hOnScreen / 2) / Math.tan(fovy / 2);
-      const needH = (F.span_x / 2) / Math.tan(fovy / 2) / asp;
-      return Math.max(needV, needH) * 1.06;   // a little air at the edges
+      const needH = (routeSpanX / 2) / Math.tan(fovy / 2) / asp;
+      return Math.max(needV, needH) * 1.04;
     };
+    // Aim at the route's centre. Nudging the target north to "use the upper
+    // frame" does the opposite -- it swings the ground downward -- so the only
+    // honest fix for empty sky is the distance, below.
+    state.tx = routeCx;
+    state.ty = routeCy;
     state.dist = fitDist();
-    state.home = {yaw:state.yaw, pitch:state.pitch, dist:state.dist, tx:0, ty:0};
+    state.home = {yaw:state.yaw, pitch:state.pitch, dist:state.dist,
+                  tx:routeCx, ty:routeCy};
 
     // Deep link: #km=8.2&dist=900&pitch=0.3&yaw=1.1 . Needed to screenshot a
     // specific stretch -- verifying that the ribbon sits on the road in the
@@ -621,10 +700,21 @@ const state = {
       state.rider = state.fly.km;
       $('#b-fly').classList.add('on');
       $('#b-fly').textContent = '停止飞行';
+      $('#q-fly').classList.add('on');
+      $('#q-fly').textContent = '停止';
     }
+    // panels=hud,ctl,legend,tip -- open the named ones
+    for (const name of (hash.get('panels') || '').split(',').filter(Boolean))
+      document.querySelector('#' + name)?.classList.add('open');
     if (hash.has('mult')) {
       state.fly.mult = +hash.get('mult');
-      for (const b of document.querySelectorAll('#speed button'))
+      // The collapsed row proxies the two actions worth reaching without
+    // expanding; keeping them as separate elements means the full panel's
+    // buttons stay the single source of their own label and state.
+    $('#q-fly').onclick = () => $('#b-fly').click();
+    $('#q-reset').onclick = () => $('#b-reset').click();
+
+    for (const b of document.querySelectorAll('#speed button'))
         b.classList.toggle('on', +b.dataset.mult === state.fly.mult);
     }
     // profile=collapsed|compact|full , legend=open
@@ -634,7 +724,7 @@ const state = {
       for (const b of document.querySelectorAll('#pfsize button'))
         b.classList.toggle('on', b.dataset.size === wantPf);
       if (wantPf === 'full')
-        $('#pftitle').textContent = '赛段剖面 · 按坡度着色，入级爬坡标注分级';
+        $('#pftitle').textContent = '赛段剖面 · 填色与路线、图例同为爬坡分级';
     }
     if (hash.get('legend') === 'open') $('#legend').classList.add('open');
     const midZ = (F.ele_min + F.ele_max) / 2;
@@ -759,13 +849,30 @@ const state = {
     const P = sc.profile;
     // Top padding has to clear the title bar, and in compact mode there are no
     // climb boxes to leave room for above the ridge line.
-    const PAD = {l:38, r:16, t:30, b:26};
+    // b leaves room for two stacked rows under the axis: km labels, then
+    // supply point names.
+    const PAD = {l:38, r:16, t:30, b:40};
     const padTop = () => $('#profile').classList.contains('full') ? 30 : 38;
     // Gradient bands, in the language a rider uses: below 3% is a drag, above
     // 10% is a wall. These are the fill colours under the curve.
+    // Measured on this route: the first cut put 42% of samples in a grey "flat"
+    // band and 26% in a near-identical blue, so 68% of the chart's area was two
+    // shades of the same thing and the whole profile read as flat blue-grey.
+    // Downhills are also now split -- a -6% descent and a -1% drift are not the
+    // same ride -- and the uphill colours start separating at 2%.
+    // Six bands, not eight. Eight made the runs of constant colour so short
+    // that the per-run fill degenerated back into per-sample stripes -- every
+    // climb came out as a rainbow. Six keeps the runs long enough to read as
+    // bands while still separating descent / flat / climbing / steep, which the
+    // first attempt failed at: its grey and blue were near-identical and
+    // together covered 68% of the chart.
     const GRADE_BANDS = [
-      [-99, -3, '#3d5a7a'], [-3, 1.5, '#4a5560'], [1.5, 4, '#5c7a46'],
-      [4, 7, '#c8992e'], [7, 10, '#e07b2a'], [10, 99, '#d4453f'],
+      [-99, -2.5, '#3f7fb5'],  // descending
+      [-2.5, 1.0, '#6e7681'],  // flat-ish
+      [1.0, 3.5, '#7fa352'],   // drag
+      [3.5, 6, '#c7a93a'],     // climbing
+      [6, 9, '#e0862a'],       // steep
+      [9, 99, '#d4453f'],      // very steep
     ];
     const gradeColour = g => {
       for (const [lo, hi, c] of GRADE_BANDS) if (g >= lo && g < hi) return c;
@@ -814,17 +921,26 @@ const state = {
         p2.fillText(String(e), x0 - 6, y);
       }
 
-      // One polygon per contiguous run of the same gradient band. Drawing a
-      // column per sample instead put ~1.1 px of colour per sample, so every
-      // small wobble in the gradient showed up as a vertical stripe and the
-      // banding stopped reading as banding.
-      p2.globalAlpha = 0.84;
+      // Fill by CLIMB CATEGORY, not by per-sample gradient. Gradient banding was
+      // measured at a 481 m median run on this route, which at 12.1 px/km is
+      // 5.8 px of colour per run -- six hues alternating every few pixels read
+      // as rainbow noise, not as information. Category fills are 1-6 km wide and
+      // use exactly the colours the 3D ribbon and the legend use, which is also
+      // the correspondence that was asked for.
+      const catAt = km => {
+        for (const c of (sc.climbs || []))
+          if (km >= c.from_km && km <= c.to_km) return c.colour;
+        return null;
+      };
+      p2.globalAlpha = 0.82;
       let i = 0;
       while (i < P.km.length - 1) {
-        const col = gradeColour(P.grade[i]);
+        const col = catAt(P.km[i]);
         let j = i;
-        while (j < P.km.length - 1 && gradeColour(P.grade[j]) === col) j++;
-        p2.fillStyle = col;
+        while (j < P.km.length - 1 && catAt(P.km[j]) === col) j++;
+        // Off-climb stretches get a neutral slate so the categorised climbs are
+        // the only thing carrying colour.
+        p2.fillStyle = col || '#39434e';
         p2.beginPath();
         p2.moveTo(X(P.km[i]), y1);
         for (let k = i; k <= j; k++) p2.lineTo(X(P.km[k]), Y(P.ele[k]));
@@ -974,7 +1090,9 @@ const state = {
           const km = parseFloat(el.dataset.km);
           const x = X(km);
           el.style.left = x + 'px';
-          if (el.dataset.ele === undefined) { el.style.top = (y1 + 9) + 'px'; continue; }
+          // Supply names go BELOW the km axis labels, not on the same line:
+          // both were at y1+8/9 and "0 km" sat on top of "出发".
+          if (el.dataset.ele === undefined) { el.style.top = (y1 + 21) + 'px'; continue; }
           const half = (el.offsetWidth || 92) / 2 + 3;
           const anchor = Y(parseFloat(el.dataset.ele)) - 7;
           let top = null, shift = 0;
@@ -1183,6 +1301,8 @@ const state = {
       state.fly.on = !state.fly.on;
       $('#b-fly').classList.toggle('on', state.fly.on);
       $('#b-fly').textContent = state.fly.on ? '停止飞行' : '沿路线飞行';
+      $('#q-fly').classList.toggle('on', state.fly.on);
+      $('#q-fly').textContent = state.fly.on ? '停止' : '飞行';
       if (state.fly.on) {
         if (state.focusKm != null) state.fly.km = state.focusKm;
         state.rider = state.fly.km;
@@ -1202,7 +1322,7 @@ const state = {
       for (const b of document.querySelectorAll('#pfsize button'))
         b.classList.toggle('on', b.dataset.size === size);
       $('#pftitle').textContent = size === 'full'
-        ? '赛段剖面 · 按坡度着色，入级爬坡标注分级' : '赛段剖面';
+        ? '赛段剖面 · 填色与路线、图例同为爬坡分级' : '赛段剖面';
       // The canvas is sized from its box, so it has to be redrawn after the
       // height changes -- and after the CSS transition, or it measures the old
       // height and the chart ends up the wrong size.
@@ -1211,6 +1331,12 @@ const state = {
     };
     for (const b of document.querySelectorAll('#pfsize button'))
       b.onclick = () => setProfileSize(b.dataset.size);
+    // The collapsed row proxies the two actions worth reaching without
+    // expanding; keeping them as separate elements means the full panel's
+    // buttons stay the single source of their own label and state.
+    $('#q-fly').onclick = () => $('#b-fly').click();
+    $('#q-reset').onclick = () => $('#b-reset').click();
+
     for (const b of document.querySelectorAll('#speed button'))
       b.onclick = () => {
         state.fly.mult = +b.dataset.mult;
